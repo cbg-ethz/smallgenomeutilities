@@ -148,6 +148,15 @@ for record in input_file.fetch():
 		# M, =, X:
 		if op == BAM_CMATCH or op == BAM_CEQUAL or op == BAM_CDIFF:
 			if found_start == False:
+				if source_str[pos_in_source_ref] == '-':
+					# Dest:   A---AAA
+					# Source: AAA-AAA
+					# Read:     A-AAA
+					#            ^
+
+					pos_in_source_ref += 1
+					continue
+
 				# don't have a start POS yet
 				try:
 					new_sam_start = fasta_pos_to_sam_pos[pos_in_source_ref]
