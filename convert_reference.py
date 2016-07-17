@@ -1,0 +1,758 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+import sys
+import time
+
+import pysam
+import Bio.SeqIO
+import progress.bar
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-t", dest="TO", help="Name of target contig", default="", required=True)
+parser.add_argument("-v", dest="VERBOSE", help="Print more information", default=False, action='store_true')
+parser.add_argument("-m", dest="MSA", help="MSA input of all contigs aligned", metavar="input", required=True)
+parser.add_argument("-i", dest="INPUT", help="Input SAM/BAM file", metavar="input", required=True)
+parser.add_argument("-o", dest="OUTPUT", help="Output SAM/BAM file", default="", metavar="output")
+parser.add_argument("-p", dest="PADDING", help="Insert silent padding states 'P' in CIGAR", default=False,
+					action='store_true')
+parser.add_argument("-X", dest="MISMATCH", help="Use X/= instead of M for Match/Mismatch states", default=False,
+					action='store_true')
+parser.add_argument("-H", dest="HARDCLIP", help="Hard-clip bases instead of the default soft-clipping", default=False,
+					action='store_true')
+args = parser.parse_args()
+
+TO_CONTIG = args.TO
+VERBOSE = args.VERBOSE
+MSA_FILE = args.MSA
+PADDED_DELETION = args.PADDING
+PERFORM_HARD_CLIPPING = True if args.HARDCLIP else False
+
+INPUT = args.INPUT
+input_filestem, input_extension = os.path.splitext(INPUT)
+OUTPUT = (input_filestem + "_out" + input_extension) if args.OUTPUT == "" else args.OUTPUT
+output_filestem, output_extension = os.path.splitext(OUTPUT)
+BINARY = True if output_extension == ".bam" else False
+
+if (INPUT == OUTPUT):
+	print("Input and output filenames cannot be identical!")
+	sys.exit(0)
+
+# Load genomes from MSA FASTA file
+genomes = {}
+for record in Bio.SeqIO.parse(MSA_FILE, "fasta"):
+	try:
+		int(record.id.split('_', 1)[1])
+		record.id = record.id.split('_', 1)[0]
+	except:
+		pass
+
+	record.seq = record.seq.upper()
+	genomes[record.id] = record
+
+# load SAM/BAM
+input_file = pysam.AlignmentFile(INPUT, "rb")
+
+sam_pos_to_fasta_pos = {}
+for ref in input_file.references:
+	ref_str = genomes[ref].seq
+	per_ref_dict = {}
+	pos = 0
+	for i in range(0, len(ref_str)):
+		if ref_str[i] != '-':
+			if not pos in per_ref_dict:
+				per_ref_dict[pos] = i
+			pos += 1
+
+	sam_pos_to_fasta_pos[ref] = per_ref_dict
+
+fasta_pos_to_sam_pos = {}
+pos = 0
+dest_str = genomes[TO_CONTIG].seq
+dest_str_gapless = str(dest_str).replace('-', '')
+for i in range(0, len(dest_str)):
+	if dest_str[i] != '-':
+		fasta_pos_to_sam_pos[i] = pos
+		pos += 1
+
+IUPAC = {
+	'A': ('A'),
+	'C': ('C'),
+	'G': ('G'),
+	'T': ('T'),
+	'R': ('A', 'G'),
+	'Y': ('C', 'T'),
+	'S': ('G', 'C'),
+	'W': ('A', 'T'),
+	'K': ('G', 'T'),
+	'M': ('A', 'C'),
+	'B': ('C', 'G', 'T'),
+	'D': ('A', 'G', 'T'),
+	'H': ('A', 'C', 'T'),
+	'V': ('A', 'C', 'G'),
+	'N': ('A', 'C', 'G', 'T')}
+
+BAM_CMATCH = 0  # 'M'
+BAM_CINS = 1  # 'I'
+BAM_CDEL = 2  # 'D'
+BAM_CREF_SKIP = 3  # 'N'
+BAM_CSOFT_CLIP = 4  # 'S'
+BAM_CHARD_CLIP = 5  # 'H'
+BAM_CPAD = 6  # 'P'
+BAM_CEQUAL = 7  # '='
+BAM_CDIFF = 8  # 'X'
+
+DIFFERENTIATE_MISMATCH = args.MISMATCH
+
+if VERBOSE and input_file.is_bam:
+	bar = progress.bar.Bar('Processing', max=input_file.mapped, suffix="%(index)d/%(max)d - %(percent)d%%")
+
+new_reads = {}
+num_paired = 0
+num_reads = 0
+
+start = time.time()
+
+for record in input_file.fetch():
+	read_seq = record.query_sequence
+	source_str = genomes[record.reference_name].seq
+
+	if VERBOSE and input_file.is_bam:
+		bar.next()
+
+	# convert cigar from RLE to list of single operations
+	expanded_cigar_ops = []
+	for r in record.cigartuples:
+		expanded_cigar_ops += [r[0]] * r[1]
+
+	# add sentinels for last position
+	expanded_cigar_ops += [-1001, -1002]
+
+	old_cigar_state = (-100, 0)
+	new_cigar_state = (-100, 0)
+
+	found_start = False
+	pos_in_read = 0
+	pos_in_cigar = 0
+	pos_in_source_ref = sam_pos_to_fasta_pos[record.reference_name][record.reference_start]
+
+	new_cigar_tuple = []
+
+	need_to_clip_left = 0
+	need_to_clip_right = 0
+
+	while (pos_in_cigar < len(expanded_cigar_ops)):
+		op = expanded_cigar_ops[pos_in_cigar]
+
+		# M, =, X:
+		if op == BAM_CMATCH or op == BAM_CEQUAL or op == BAM_CDIFF:
+			if found_start == False:
+				# don't have a start POS yet
+				try:
+					new_sam_start = fasta_pos_to_sam_pos[pos_in_source_ref]
+
+					# Dest:   ---AAA
+					# Source: AAAAAA
+					# Read:      AAA
+					#            ^
+
+					new_state = BAM_CMATCH
+					pos_in_dest_ref = pos_in_source_ref
+					found_start = True
+					pos_in_dest_ref += 1
+				except:
+					# Dest:   ----AA
+					# Source: AAAAAA
+					# Read:      AAA
+					#            ^
+
+					# left Clip
+					if PERFORM_HARD_CLIPPING:
+						new_state = BAM_CHARD_CLIP
+						need_to_clip_left += 1
+					else:
+						new_state = BAM_CSOFT_CLIP
+
+				pos_in_cigar += 1
+				pos_in_read += 1
+				pos_in_source_ref += 1
+
+			else:
+				# have start POS
+				if source_str[pos_in_source_ref] == '-':
+					if dest_str[pos_in_dest_ref] == '-':
+						# Dest:   AAA-AAA
+						# Source: AAA-AAA
+						# Read:   AAA-AAA
+						#            ^
+
+						pos_in_source_ref += 1
+						pos_in_dest_ref += 1
+						continue
+					else:
+						# Dest:   AAAAAAA
+						# Source: AAA-AAA
+						# Read:   AAA-AAA
+						#            ^
+
+						# Deletion
+						new_state = BAM_CDEL
+
+						pos_in_source_ref += 1
+						pos_in_dest_ref += 1
+
+				else:
+					if dest_str[pos_in_dest_ref] == '-':
+						# Dest:   AAA-AAA
+						# Source: AAAAAAA
+						# Read:   AAAAAAA
+						#            ^
+
+						# Insertion
+						new_state = BAM_CINS
+
+						pos_in_source_ref += 1
+						pos_in_dest_ref += 1
+						pos_in_cigar += 1
+						pos_in_read += 1
+
+					else:
+						# Dest:   AAAAAAA
+						# Source: AAAAAAA
+						# Read:   AAAAAAA
+						#            ^
+
+						new_state = BAM_CMATCH
+
+						pos_in_source_ref += 1
+						pos_in_dest_ref += 1
+						pos_in_cigar += 1
+						pos_in_read += 1
+
+		# I:
+		elif op == BAM_CINS:
+			if found_start == False:
+				# Dest:   -- AAA
+				# Source: AA AAA
+				# Read:    AGAAA
+				#           ^
+
+				# left Clip
+				if PERFORM_HARD_CLIPPING:
+					new_state = BAM_CHARD_CLIP
+					need_to_clip_left += 1
+				else:
+					new_state = BAM_CSOFT_CLIP
+
+				pos_in_cigar += 1
+				pos_in_read += 1
+
+			else:
+				if source_str[pos_in_source_ref] == '-':
+					if dest_str[pos_in_dest_ref] == '-':
+						# Dest:   AAA -AAA
+						# Source: AAA -AAA
+						# Read:   AAAA AAA
+						#            ^
+
+						pos_in_source_ref += 1
+						pos_in_dest_ref += 1
+						continue
+					else:
+						# Dest:   AAA AAAA
+						# Source: AAA -AAA
+						# Read:   AAAA AAA
+						#            ^
+
+						new_state = BAM_CMATCH
+
+						pos_in_source_ref += 1
+						pos_in_dest_ref += 1
+						pos_in_cigar += 1
+						pos_in_read += 1
+
+				else:
+					if dest_str[pos_in_dest_ref] == '-':
+						# Dest:   AAA -AAA
+						# Source: AAA AAAA
+						# Read:   AAAA AAA
+						#            ^
+
+						# Insertion
+						new_state = BAM_CINS
+
+						pos_in_cigar += 1
+						pos_in_read += 1
+
+					else:
+						# Dest:   AAA AAA
+						# Source: AAA AAA
+						# Read:   AAAAAAA
+						#            ^
+
+						# Insertion
+						new_state = BAM_CINS
+
+						pos_in_cigar += 1
+						pos_in_read += 1
+
+		# D, N:
+		elif op == BAM_CDEL or op == BAM_CREF_SKIP:
+			if found_start == False:
+				# Dest:   ---AAA
+				# Source: AAAAAA
+				# Read:    A-AAA
+				#           ^
+
+				pos_in_cigar += 1
+				pos_in_source_ref += 1
+				continue
+
+			else:
+				# have start POS
+				if source_str[pos_in_source_ref] == '-':
+					if dest_str[pos_in_dest_ref] == '-':
+						# Dest:   AAA-AAA
+						# Source: AAA-AAA
+						# Read:   AAA-AAA
+						#            ^
+
+						pos_in_source_ref += 1
+						pos_in_dest_ref += 1
+						continue
+					else:
+						# Dest:   AAAAAAA
+						# Source: AAA-AAA
+						# Read:   AAA--AA
+						#            ^
+
+						# Deletion
+						new_state = BAM_CDEL
+
+						pos_in_source_ref += 1
+						pos_in_dest_ref += 1
+
+				else:
+					if dest_str[pos_in_dest_ref] == '-':
+						# Dest:   AAA-AAA
+						# Source: AAAAAAA
+						# Read:   AAA-AAA
+						#            ^
+
+						# Padded deletion
+						pos_in_source_ref += 1
+						pos_in_dest_ref += 1
+						pos_in_cigar += 1
+
+						if PADDED_DELETION:
+							new_state = BAM_CPAD
+						else:
+							continue
+
+					else:
+						# Dest:   AAAAAAA
+						# Source: AAAAAAA
+						# Read:   AAA-AAA
+						#            ^
+
+						# Deletion
+						new_state = BAM_CDEL
+
+						pos_in_source_ref += 1
+						pos_in_dest_ref += 1
+						pos_in_cigar += 1
+
+		# S:
+		elif op == BAM_CSOFT_CLIP:
+			if PERFORM_HARD_CLIPPING:
+				new_state = BAM_CHARD_CLIP
+				if found_start == False:
+					need_to_clip_left += 1
+				else:
+					need_to_clip_right += 1
+			else:
+				new_state = BAM_CSOFT_CLIP
+
+			pos_in_cigar += 1
+			pos_in_read += 1
+
+		# H:
+		elif op == BAM_CHARD_CLIP:
+			pos_in_cigar += 1
+			new_state = BAM_CHARD_CLIP
+
+		# P:
+		elif op == BAM_CPAD:
+			if found_start == False:
+				# Dest:   ---AAA
+				# Source: AAAAAA
+				# Read:    A-AAA
+				#           ^
+
+				pos_in_cigar += 1
+				pos_in_source_ref += 1
+				continue
+
+			else:
+				# have start POS
+				if source_str[pos_in_source_ref] == '-':
+					if dest_str[pos_in_dest_ref] == '-':
+						# Dest:   AAA-AAA
+						# Source: AAA-AAA
+						# Read:   AAA-AAA
+						#            ^
+
+						# Padded deletion
+						pos_in_cigar += 1
+
+						if PADDED_DELETION:
+							new_state = BAM_CPAD
+						else:
+							continue
+					else:
+						# Dest:   AAAAAAA
+						# Source: AAA-AAA
+						# Read:   AAA--AA
+						#            ^
+
+						# Deletion
+						new_state = BAM_CDEL
+
+						pos_in_cigar += 1
+						pos_in_source_ref += 1
+						pos_in_dest_ref += 1
+
+				else:
+					if dest_str[pos_in_dest_ref] == '-':
+						# Dest:   AAA--AAA
+						# Source: AAAAAAAA
+						# Read:   AAA-AAAA
+						#            ^
+
+						# Padded deletion
+						pos_in_cigar += 1
+
+						if PADDED_DELETION:
+							new_state = BAM_CPAD
+						else:
+							continue
+
+					else:
+						# Dest:   AAA AAAA
+						# Source: AAA AAAA
+						# Read:   AAA-AAAA
+						#            ^
+
+						# Padded deletion
+						pos_in_cigar += 1
+
+						if PADDED_DELETION:
+							new_state = BAM_CPAD
+						else:
+							continue
+
+		elif op < 0:
+			new_state = op
+			pos_in_cigar += 1
+		else:
+			print("{} not recognized yet!".format(op))
+			sys.exit(0)
+
+		if new_state != new_cigar_state[0]:
+			# I ...... -1001 (end)
+			if new_state == -1001 and new_cigar_state[0] == BAM_CINS:
+				if PERFORM_HARD_CLIPPING:
+					new_cigar_state[0] = BAM_CHARD_CLIP
+					need_to_clip_right += new_cigar_state[1]
+				else:
+					new_cigar_state[0] = BAM_CSOFT_CLIP
+
+			# have to rewrite CIGAR tuples if a D and I operations are adjacent
+			# D + I
+			if old_cigar_state[0] == BAM_CDEL and new_cigar_state[0] == BAM_CINS:
+				num_del = old_cigar_state[1]
+				num_insert = new_cigar_state[1]
+				num_match = min(num_del, num_insert)
+
+				if num_del == num_insert:
+					# Dest:   GC AA-- TC      GC AA TC
+					# Read:   GC --AA TC  ->  GC AA TC
+					#            DDII            MM
+					old_cigar_state = (-100, 0)
+					new_cigar_state = (BAM_CMATCH, num_match)
+
+				elif num_del > num_insert:
+					# Dest:   GC AAA-- TC      GC AAA TC
+					# Read:   GC ---AA TC  ->  GC -AA TC
+					#            DDDII            DMM
+					old_cigar_state = (BAM_CDEL, num_del - num_match)
+					new_cigar_state = (BAM_CMATCH, num_match)
+
+				else:
+					# Dest:   GC AA--- TC      GC AA- TC
+					# Read:   GC --AAA TC  ->  GC AAA TC
+					#            DDIII            MMI
+					old_cigar_state = (BAM_CMATCH, num_match)
+					new_cigar_state = (BAM_CINS, num_insert - num_match)
+
+			# I + D
+			if old_cigar_state[0] == BAM_CINS and new_cigar_state[0] == BAM_CDEL:
+				num_insert = old_cigar_state[1]
+				num_del = new_cigar_state[1]
+				num_match = min(num_del, num_insert)
+
+				if num_del == num_insert:
+					# Dest:   GC --AA TC  ->  GC AA TC
+					# Read:   GC AA-- TC      GC AA TC
+					#            IIDD            MM
+					old_cigar_state = (-100, 0)
+					new_cigar_state = (BAM_CMATCH, num_match)
+
+				elif num_del > num_insert:
+					# Dest:   GC --AAA TC  ->  GC AAA TC
+					# Read:   GC AA--- TC      GC AA- TC
+					#            IIDDD            MMD
+					old_cigar_state = (BAM_CMATCH, num_match)
+					new_cigar_state = (BAM_CDEL, num_del - num_match)
+
+				else:
+					# Dest:   GC ---AA TC  ->  GC -AA TC
+					# Read:   GC AAA-- TC      GC AAA TC
+					#            IIIDD            IMM
+					old_cigar_state = (BAM_CINS, num_insert - num_match)
+					new_cigar_state = (BAM_CMATCH, num_match)
+
+			if (old_cigar_state[0] >= 0):
+				new_cigar_tuple.append((old_cigar_state[0], old_cigar_state[1]))
+
+			# swap old and new state
+			old_cigar_state = new_cigar_state
+			new_cigar_state = [new_state, 1]
+		else:
+			new_cigar_state[1] += 1
+
+	###################
+	# POST-PROCESSING #
+	###################
+	# check left flanking region + merge M-M pairs
+	i = 0
+	while i < len(new_cigar_tuple) - 1:
+		left_op = new_cigar_tuple[i]
+		right_op = new_cigar_tuple[i + 1]
+
+		# M + M:
+		if left_op[0] == BAM_CMATCH and right_op[0] == BAM_CMATCH:
+			new_cigar_tuple[i:i + 2] = [(BAM_CMATCH, left_op[1] + right_op[1])]
+		# S + I:
+		elif left_op[0] == BAM_CSOFT_CLIP and right_op[0] == BAM_CINS:
+			new_cigar_tuple[i:i + 2] = [(BAM_CSOFT_CLIP, left_op[1] + right_op[1])]
+		# S + D:
+		elif left_op[0] == BAM_CSOFT_CLIP and right_op[0] == BAM_CDEL:
+			new_cigar_tuple[i:i + 2] = [(BAM_CSOFT_CLIP, left_op[1])]
+		# S + P:
+		elif left_op[0] == BAM_CSOFT_CLIP and right_op[0] == BAM_CPAD:
+			new_cigar_tuple[i:i + 2] = [(BAM_CSOFT_CLIP, left_op[1])]
+		# H + I:
+		elif left_op[0] == BAM_CHARD_CLIP and right_op[0] == BAM_CINS:
+			if PERFORM_HARD_CLIPPING:
+				need_to_clip_left += right_op[1]
+				new_cigar_tuple[i:i + 2] = [(BAM_CHARD_CLIP, left_op[1] + right_op[1])]
+			else:
+				new_cigar_tuple[i + 1] = (BAM_CSOFT_CLIP, right_op[1])
+				i += 1
+		# H + D:
+		elif left_op[0] == BAM_CHARD_CLIP and right_op[0] == BAM_CDEL:
+			new_cigar_tuple[i:i + 2] = [(BAM_CHARD_CLIP, left_op[1])]
+		# H + P:
+		elif left_op[0] == BAM_CHARD_CLIP and right_op[0] == BAM_CPAD:
+			new_cigar_tuple[i:i + 2] = [(BAM_CHARD_CLIP, left_op[1])]
+		# H + S:
+		# elif left_op[0] == BAM_CHARD_CLIP and right_op[0] == BAM_CSOFT_CLIP:
+		#    i += 1
+		else:
+			i += 1
+
+	# check right flanking region
+	i = len(new_cigar_tuple) - 2
+	# cant_stop = True
+	while i >= 0:
+		# cant_stop = False
+
+		left_op = new_cigar_tuple[i]
+		right_op = new_cigar_tuple[i + 1]
+
+		if left_op[0] == BAM_CMATCH:
+			# reached a match state, hence everything
+			# before will be compliant
+			break
+
+		# I + S:
+		if left_op[0] == BAM_CINS and right_op[0] == BAM_CSOFT_CLIP:
+			# cant_stop = True
+			new_cigar_tuple[i:i + 2] = [(BAM_CSOFT_CLIP, left_op[1] + right_op[1])]
+		# D + S:
+		elif left_op[0] == BAM_CDEL and right_op[0] == BAM_CSOFT_CLIP:
+			# cant_stop = True
+			new_cigar_tuple[i:i + 2] = [(BAM_CSOFT_CLIP, right_op[1])]
+		# P + S:
+		elif left_op[0] == BAM_CPAD and right_op[0] == BAM_CSOFT_CLIP:
+			# cant_stop = True
+			new_cigar_tuple[i:i + 2] = [(BAM_CSOFT_CLIP, right_op[1])]
+		# I + H:
+		elif left_op[0] == BAM_CINS and right_op[0] == BAM_CHARD_CLIP:
+			# cant_stop = True
+			if PERFORM_HARD_CLIPPING:
+				need_to_clip_right += left_op[1]
+				new_cigar_tuple[i:i + 2] = [(BAM_CHARD_CLIP, left_op[1] + right_op[1])]
+			else:
+				new_cigar_tuple[i] = (BAM_CSOFT_CLIP, left_op[1])
+		# D + H:
+		elif left_op[0] == BAM_CDEL and right_op[0] == BAM_CHARD_CLIP:
+			# cant_stop = True
+			new_cigar_tuple[i:i + 2] = [(BAM_CHARD_CLIP, right_op[1])]
+		# P + H:
+		elif left_op[0] == BAM_CPAD and right_op[0] == BAM_CHARD_CLIP:
+			# cant_stop = True
+			new_cigar_tuple[i:i + 2] = [(BAM_CHARD_CLIP, right_op[1])]
+		# S + H:
+		# elif left_op[0] == BAM_CSOFT_CLIP and right_op[0] == BAM_CHARD_CLIP:
+		#    #cant_stop = True
+		#    pass
+		i -= 1
+
+	# write new strings
+	new_seq = record.query_sequence[need_to_clip_left:(record.query_length - need_to_clip_right)]
+	new_qual = record.query_qualities[need_to_clip_left:(record.query_length - need_to_clip_right)]
+
+	# calculate edit distance (and possibly replace match states)
+	pos_in_read = 0
+	pos_in_dest_ref = new_sam_start
+	new_edit_distance = 0
+	replace_cigar_tuple = []
+
+
+	def match_state_det(read_base, genome_base):
+		if read_base in IUPAC[genome_base]:
+			return BAM_CEQUAL
+		else:
+			return BAM_CDIFF
+
+
+	tlen = 0
+	for op in new_cigar_tuple:
+		cigar_op = op[0]
+		cigar_op_count = op[1]
+
+		if cigar_op == BAM_CMATCH:
+			old_state = match_state_det(new_seq[pos_in_read], dest_str_gapless[pos_in_dest_ref])
+			count = 1
+			for i in range(1, cigar_op_count):
+				new_state = match_state_det(new_seq[pos_in_read + i], dest_str_gapless[pos_in_dest_ref + i])
+				if old_state != new_state:
+					if old_state == BAM_CDIFF:
+						new_edit_distance += count
+					replace_cigar_tuple.append((old_state, count))
+					old_state = new_state
+					count = 1
+				else:
+					count += 1
+
+			if old_state == BAM_CDIFF:
+				new_edit_distance += count
+			replace_cigar_tuple.append((old_state, count))
+
+			tlen += cigar_op_count
+			pos_in_read += cigar_op_count
+			pos_in_dest_ref += cigar_op_count
+		elif cigar_op == BAM_CINS:
+			new_edit_distance += cigar_op_count
+			replace_cigar_tuple.append((cigar_op, cigar_op_count))
+			pos_in_read += cigar_op_count
+		elif cigar_op == BAM_CDEL:
+			new_edit_distance += cigar_op_count
+			replace_cigar_tuple.append((cigar_op, cigar_op_count))
+			tlen += cigar_op_count
+			pos_in_dest_ref += cigar_op_count
+		elif cigar_op == BAM_CSOFT_CLIP:
+			replace_cigar_tuple.append((cigar_op, cigar_op_count))
+			pos_in_read += cigar_op_count
+		elif cigar_op == BAM_CHARD_CLIP or cigar_op == BAM_CPAD:
+			replace_cigar_tuple.append((cigar_op, cigar_op_count))
+		else:
+			print("State '{}' should not occur!".format(cigar_op))
+			sys.exit(0)
+
+	if DIFFERENTIATE_MISMATCH:
+		new_cigar_tuple = replace_cigar_tuple
+
+	new_record = record
+	new_record.cigartuples = new_cigar_tuple
+	new_record.reference_start = new_sam_start
+	new_record.template_length = tlen
+	new_record.set_tags([("NM", new_edit_distance, "i")])
+	new_record.query_sequence = new_seq
+	new_record.query_qualities = new_qual
+
+	num_reads += 1
+	if new_record.query_name in new_reads:
+		num_paired += 2
+		new_reads[new_record.query_name].append(new_record)
+		new_reads[new_record.query_name][0].next_reference_start = new_reads[new_record.query_name][1].reference_start
+		new_reads[new_record.query_name][1].next_reference_start = new_reads[new_record.query_name][0].reference_start
+
+		max_pos = max(
+			new_reads[new_record.query_name][0].reference_start + new_reads[new_record.query_name][0].template_length,
+			new_reads[new_record.query_name][1].reference_start + new_reads[new_record.query_name][1].template_length)
+		min_pos = min(new_reads[new_record.query_name][0].reference_start,
+					  new_reads[new_record.query_name][1].reference_start)
+
+		full_tlen = max_pos - min_pos
+
+		if new_reads[new_record.query_name][0].reference_start < new_reads[new_record.query_name][1].reference_start:
+			new_reads[new_record.query_name][0].template_length = full_tlen
+			new_reads[new_record.query_name][1].template_length = -full_tlen
+		else:
+			new_reads[new_record.query_name][0].template_length = -full_tlen
+			new_reads[new_record.query_name][1].template_length = full_tlen
+
+	else:
+		new_reads[new_record.query_name] = [new_record]
+
+input_file.close()
+if VERBOSE and input_file.is_bam:
+	bar.finish()
+
+# Writing SAM/BAM file
+new_header = {'HD': {'VN': '1.0'},
+			  'SQ': [{'LN': len(dest_str_gapless), 'SN': TO_CONTIG}]}
+
+write_options = "wb" if BINARY else "wh"
+output_file_name = "temp.bam" if BINARY else OUTPUT
+
+output_file = pysam.AlignmentFile(output_file_name, write_options, header=new_header)
+for identifier, pairs in new_reads.items():
+	for r in pairs:
+		output_file.write(r)
+output_file.close()
+
+# if BAM, also sort + index file
+if BINARY:
+	print("Sorting {}".format(OUTPUT))
+	pysam.sort("-o", OUTPUT, output_file_name)
+
+	print("Indexing {}".format(OUTPUT))
+	pysam.index(OUTPUT)
+
+	os.remove(output_file_name)
+
+end = time.time()
+
+# statistics
+if VERBOSE:
+	print("Number of reads:        {}".format(num_reads))
+	print("Number of paired reads: {}".format(num_paired))
+
+	duration = end - start
+	print("Processed in {}".format(time.strftime("%Hh %Mmin %Ss", time.gmtime(duration))))
+	print("{} reads/s".format(int(num_reads / duration)))

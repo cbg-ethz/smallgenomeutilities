@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+
+import argparse
+import __mapper_impl__
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-f", dest="FROM", help="Name and Coordinates of source contig, e.g. CONSENSUS:100-200",
+                    metavar="source", required=True)
+parser.add_argument("-t", dest="TO", help="Name of target contig", metavar="dest", required=True)
+parser.add_argument("-1", dest="ONE_BASED", help="Whether coordinates should be treated 1-based", default=False,
+                    action='store_true')
+parser.add_argument("-v", dest="VERBOSE", help="Print more information (such as subsequences in references)",
+                    default=False, action='store_true')
+parser.add_argument("FILES", nargs=1, metavar="files")
+args = parser.parse_args()
+
+FROM_CONTIG = args.FROM.split(':', 1)[0]
+COORDINATES = args.FROM.split(':', 1)[1]
+TO_CONTIG = args.TO
+VERBOSE = args.VERBOSE
+MSA_FILE = args.FILES[0]
+OFFSET = -1 if args.VERBOSE else 0
+
+# Split intervals into list of indices
+loci = __mapper_impl__.find_interval(FROM_CONTIG, TO_CONTIG, COORDINATES, OFFSET, MSA_FILE, VERBOSE)
+
+
+def print_range(start, end, suffix=""):
+    if start + 1 == end:
+        print(start, end=suffix)
+    else:
+        print("{}-{}".format(start, end), end=suffix)
+
+
+try:
+    start = loci[0]
+    assert isinstance(start, int)
+
+    end = start + 1
+    for i in range(1, len(loci)):
+        if end != loci[i]:
+            print_range(start - OFFSET, end - OFFSET)
+            print(",", end="")
+            start = loci[i]
+            end = start + 1
+        else:
+            end += 1
+
+    print_range(start - OFFSET, end - OFFSET, "\n")
+except:
+    print("-1")
