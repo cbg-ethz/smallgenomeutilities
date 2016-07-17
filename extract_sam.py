@@ -20,6 +20,7 @@ parser.add_argument("--mf", dest="MIN_FREQ", help="Minimum frequency to output",
 parser.add_argument("--mc", dest="MIN_COUNT", help="Minimum count to output", default=0, metavar="INT")
 parser.add_argument("--prefix", dest="PREFIX", help="Prefix to add to header", default="seq", metavar="STR")
 parser.add_argument("-p", dest="PROTEINS", help="Output sequences as translated proteins", default=False, action='store_true')
+parser.add_argument("-T", dest="TRAIT", help="Output sequences in trait format (for SeTesT)", default=False, action='store_true')
 parser.add_argument("FILES", nargs=1, metavar="msa file")
 args = parser.parse_args()
 
@@ -33,6 +34,7 @@ MSA_FILE = args.FILES[0]
 PROTEINS = args.PROTEINS
 PREFIX = args.PREFIX
 # OFFSET = -1 if args.ONE_BASED else 0
+TRAIT_OUTPUT = args.TRAIT
 
 INPUT = args.INPUT
 input_filestem, input_extension = os.path.splitext(INPUT)
@@ -174,7 +176,10 @@ i = 0
 used = 0
 for sequence, count in sorted_seq:
 	if count / retained_total >= MINIMUM_FREQ and count >= MINIMUM_COUNT:
-		out_file.write(">{}{}_{}\n{}\n".format(PREFIX, i, count, sequence))
+		if TRAIT_OUTPUT:
+			out_file.write("{}{}\t{}\t{}\n".format(PREFIX, i, sequence, count))
+		else:
+			out_file.write(">{}{}_{}\n{}\n".format(PREFIX, i, count, sequence))
 		i += 1
 		used += count
 out_file.close()
