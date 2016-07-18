@@ -189,5 +189,8 @@ for sequence, count in sorted_seq:
 		used += count
 out_file.close()
 
-print("Total reads:    {}".format(total))
-print("Retained reads: {} ({:.1f}%)".format(used, used/total * 100))
+try:
+	print("Total reads:    {}".format(total))
+	print("Retained reads: {} ({:.1f}%)".format(used, used/total * 100))
+except:
+	pass
