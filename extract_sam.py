@@ -19,6 +19,7 @@ parser.add_argument("-o", dest="OUTPUT", help="Output FASTA file", default="", m
 parser.add_argument("--mf", dest="MIN_FREQ", help="Minimum frequency to output", default=0, metavar="FLOAT")
 parser.add_argument("--mc", dest="MIN_COUNT", help="Minimum count to output", default=0, metavar="INT")
 parser.add_argument("--prefix", dest="PREFIX", help="Prefix to add to header", default="seq", metavar="STR")
+parser.add_argument("--rg", dest="MIN_GAP_FREQ", help="Minimum frequency for gap containing sequences", default=0, metavar="FLOAT")
 parser.add_argument("-p", dest="PROTEINS", help="Output sequences as translated proteins", default=False, action='store_true')
 parser.add_argument("-T", dest="TRAIT", help="Output sequences in trait format (for SeTesT)", default=False, action='store_true')
 parser.add_argument("FILES", nargs=1, metavar="msa file")
@@ -35,6 +36,7 @@ PROTEINS = args.PROTEINS
 PREFIX = args.PREFIX
 # OFFSET = -1 if args.ONE_BASED else 0
 TRAIT_OUTPUT = args.TRAIT
+MIN_GAP_FREQ = float(args.MIN_GAP_FREQ)
 
 INPUT = args.INPUT
 input_filestem, input_extension = os.path.splitext(INPUT)
@@ -175,6 +177,9 @@ out_file = open(OUTPUT, "wt")
 i = 0
 used = 0
 for sequence, count in sorted_seq:
+	if '-' in sequence and count / retained_total < MIN_GAP_FREQ:
+		continue
+
 	if count / retained_total >= MINIMUM_FREQ and count >= MINIMUM_COUNT:
 		if TRAIT_OUTPUT:
 			out_file.write("{}{}\t{}\t{}\n".format(PREFIX, i, sequence, count))
