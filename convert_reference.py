@@ -242,6 +242,15 @@ for record in input_file.fetch():
 		# I:
 		elif op == BAM_CINS:
 			if found_start == False:
+				if source_str[pos_in_source_ref] == '-':
+					# Dest:   A---AAA
+					# Source: AAA-AAA
+					# Read:     AAAAA
+					#            ^
+
+					pos_in_source_ref += 1
+					continue
+
 				# Dest:   -- AAA
 				# Source: AA AAA
 				# Read:    AGAAA
@@ -309,6 +318,15 @@ for record in input_file.fetch():
 		# D, N:
 		elif op == BAM_CDEL or op == BAM_CREF_SKIP:
 			if found_start == False:
+				if source_str[pos_in_source_ref] == '-':
+					# Dest:   A---AAA
+					# Source: AAA-AAA
+					# Read:     A--AA
+					#            ^
+
+					pos_in_source_ref += 1
+					continue
+
 				# Dest:   ---AAA
 				# Source: AAAAAA
 				# Read:    A-AAA
