@@ -32,7 +32,6 @@ TRANSLATE_INTO_PROTEIN = args.PROTEIN
 # first round
 invalid_loci = []
 
-
 def load_initial(filename):
 	first_round_sequences = {}
 	for record in Bio.SeqIO.parse(filename, "fasta"):
@@ -44,13 +43,16 @@ def load_initial(filename):
 			# Vpr hack, remove frameshift
 			new_seq = new_seq[:212] + new_seq[213:]
 
+		if new_seq.count('-') > 0.25*len(new_seq) or freq < MIN_FREQ:
+			continue
+
 		if new_seq in first_round_sequences:
 			first_round_sequences[new_seq][0] += freq
 		else:
 			first_round_sequences[new_seq] = [freq, identifier]
 
 		for i in range(0, len(new_seq), 3):
-			if new_seq[i:i + 3].count('-') > 0:
+			if 0 < new_seq[i:i + 3].count('-'):
 				invalid_loci.append(i)
 
 	return first_round_sequences
@@ -84,14 +86,12 @@ def curate_seqs(seqs):
 			final_sequences[new_seq] = details
 	return final_sequences
 
-
-final_trans = load_initial(INPUT_TRANS)
-final_recip = load_initial(INPUT_RECIPIENT)
+final_trans = curate_seqs(seqs_trans)
+final_recip = curate_seqs(seqs_recip)
 
 # finally, write file
 out_file = open(OUTPUT_FILE, "wt")
 i = 0
-
 
 def write_to_file(seqs, file):
 	# sort by count
@@ -111,7 +111,6 @@ def write_to_file(seqs, file):
 
 		file.write(">{}_{}\n{}\n".format(header, int(10000 * details[0]), sequence))
 		i += 1
-
 
 write_to_file(final_trans, out_file)
 write_to_file(final_recip, out_file)
