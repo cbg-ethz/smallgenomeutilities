@@ -16,6 +16,7 @@ parser.add_argument("-o", dest="OUTPUT", help="Name of output file to write sequ
 parser.add_argument("--prefix", dest="PREFIX",
 					help="Prefix to use in FASTA header (retains source prefixes if none provided)", default="")
 parser.add_argument("--mf", dest="MIN_FREQ", help="Minimum frequency required for keeping sequence", default=0)
+parser.add_argument("-L", dest="LENGTH", help="Length of sequences have to be EXACTLY L", default=0)
 parser.add_argument("-p", dest="PROTEIN", help="Translate sequences into protein sequences", default=False,
 					action='store_true')
 args = parser.parse_args()
@@ -26,6 +27,7 @@ INPUT_RECIPIENT = args.INPUT_RECIPIENT
 OUTPUT_FILE = args.OUTPUT
 PREFIX = args.PREFIX
 MIN_FREQ = float(args.MIN_FREQ)
+LENGTH = int(args.LENGTH)
 
 TRANSLATE_INTO_PROTEIN = args.PROTEIN
 
@@ -39,11 +41,14 @@ def load_initial(filename):
 		freq = float(record.id.split('_', 1)[1])
 		new_seq = str(record.seq.upper())
 
+		if LENGTH > 0 and len(new_seq) != LENGTH:
+			continue
+
 		if len(new_seq) == 289:
 			# Vpr hack, remove frameshift
 			new_seq = new_seq[:212] + new_seq[213:]
 
-		if new_seq.count('-') > 0.25*len(new_seq) or freq < MIN_FREQ:
+		if new_seq.count('-') / len(new_seq) > 0.10 or freq < MIN_FREQ:
 			continue
 
 		if new_seq in first_round_sequences:
