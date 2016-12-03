@@ -1,10 +1,13 @@
+from sys import version_info, exit
 from os import path
 from setuptools import setup
 
-# Utility function to read the README file.
-here = path.abspath(path.dirname(__file__))
+# Will only ever support Py3
+if not version_info[0] == 3:
+	exit("Sorry, only Python 3 is supported")
 
 # Get the long description from the README file
+here = path.abspath(path.dirname(__file__))
 with open(path.join(here, "README"), encoding='utf-8') as f:
 	long_description = f.read()
 
@@ -33,5 +36,7 @@ setup(
 		"Topic :: Scientific/Engineering :: Bio-Informatics",
 		"Topic :: Utilities",
 		"License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
-	],
+		"Programming Language :: Python :: 3",
+		"Programming Language :: Python :: 3.5"
+	]
 )
