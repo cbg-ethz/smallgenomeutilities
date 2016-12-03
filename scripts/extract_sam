@@ -3,11 +3,12 @@
 from collections import namedtuple
 
 import argparse
-from __mapper_impl__ import convert_from_intervals_to_list, find_interval_on_dest
 import pysam
 import os
 import sys
 import Bio.Seq
+
+from SmallGenomeUtilities.__mapper_impl__ import convert_from_intervals_to_list, find_interval_on_dest
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-t", dest="TO", help="Name of target contig, e.g. HXB2:2253-2256", metavar="dest", required=True)
@@ -19,11 +20,15 @@ parser.add_argument("-o", dest="OUTPUT", help="Output FASTA file", default="", m
 parser.add_argument("--mf", dest="MIN_FREQ", help="Minimum frequency to output", default=0, metavar="FLOAT")
 parser.add_argument("--mc", dest="MIN_COUNT", help="Minimum count to output", default=0, metavar="INT")
 parser.add_argument("--prefix", dest="PREFIX", help="Prefix to add to header", default="seq", metavar="STR")
-parser.add_argument("--rg", dest="MIN_GAP_FREQ", help="Minimum frequency for gap containing sequences", default=0, metavar="FLOAT")
-parser.add_argument("--rog", dest="REMOVEONLYGAPS", help="Remove sequences consisting only of gaps and stop codons", default=False, action='store_true')
-parser.add_argument("-p", dest="PROTEINS", help="Output sequences as translated proteins", default=False, action='store_true')
-parser.add_argument("-T", dest="TRAIT", help="Output sequences in trait format (for SeTesT)", default=False, action='store_true')
-parser.add_argument("FILES", nargs=1, metavar="msa file")
+parser.add_argument("--rg", dest="MIN_GAP_FREQ", help="Minimum frequency for gap containing sequences", default=0,
+					metavar="FLOAT")
+parser.add_argument("--rog", dest="REMOVEONLYGAPS", help="Remove sequences consisting only of gaps and stop codons",
+					default=False, action='store_true')
+parser.add_argument("-p", dest="PROTEINS", help="Output sequences as translated proteins", default=False,
+					action='store_true')
+parser.add_argument("-T", dest="TRAIT", help="Output sequences in trait format (for SeTesT)", default=False,
+					action='store_true')
+parser.add_argument("FILES", nargs=1, metavar="MSA_file", help="file containing MSA")
 args = parser.parse_args()
 
 TO_CONTIG = args.TO.split(':', 1)[0]
@@ -62,89 +67,91 @@ reads = {}
 # pair reads
 for record in samfile.fetch():
 	read_id = str(record.query_name)
-	
+
 	if read_id in reads:
 		reads[read_id].append(record)
-		
+
 		if reads[read_id][1].reference_start < reads[read_id][0].reference_start:
 			reads[read_id][0], reads[read_id][1] = reads[read_id][1], reads[read_id][0]
 	else:
 		reads[read_id] = [record]
 
-#print(reads[0:5])
-#sys.exit(0)
+
+# print(reads[0:5])
+# sys.exit(0)
 
 def seq_builder(have_already_loci, subsequence, read, contig_details):
 	seq = subsequence
 	found_loci = have_already_loci
-	
+
 	if (contig_details.locus_start in range(read.reference_start, read.reference_end)) or (
-		contig_details.locus_end in range(read.reference_start, read.reference_end)):
-		
+				contig_details.locus_end in range(read.reference_start, read.reference_end)):
+
 		pos_on_read = 0
 		pos_on_genome = read.reference_start
-	
+
 		for cigar_op in read.cigartuples:
 			op = cigar_op[0]
 			op_len = cigar_op[1]
-	
+
 			# M, =, X:
 			if op == 0 or op == 7 or op == 8:
 				for i in range(0, op_len):
 					if (pos_on_genome + i in contig_details.map) and not (pos_on_genome + i in found_loci):
 						found_loci.append(pos_on_genome + i)
 						seq += read.query_sequence[pos_on_read + i]
-	
+
 				pos_on_read += op_len
 				pos_on_genome += op_len
-	
+
 			# I, S:
 			elif op == 1 or op == 4:
 				pos_on_read += op_len
-	
+
 			# D:
 			elif op == 2:
 				for i in range(0, op_len):
 					if (pos_on_genome + i in contig_details.map) and not (pos_on_genome + i in found_loci):
 						found_loci.append(pos_on_genome + i)
 						seq += '-'
-	
+
 				pos_on_genome += op_len
-	
+
 			# N:
 			elif op == 3:
 				pos_on_genome += op_len
-	
+
 			# H, P:
 			elif op == 5 or op == 6:
 				pass
-	
+
 			else:
 				raise ("Unrecognized CIGAR operation {}".format(op))
-	
+
 	return seq, found_loci
+
 
 total = 0
 extracted_subsequences = {}
 for identifiers, mates in reads.items():
 	contig_tuple = contig_loci_map[mates[0].reference_name]
-	
+
 	subsequence, loci_covered = seq_builder([], "", mates[0], contig_tuple)
-	
+
 	if len(subsequence) < len(contig_tuple.map) and len(mates) > 1:
 		# need to try second mate
 		subsequence, new_loci = seq_builder(loci_covered, subsequence, mates[1], contig_tuple)
-	
+
 	if len(subsequence) == len(contig_tuple.map):
 		# covered all loci, hence add to extracted reads
-		
+
 		total += 1
 		if subsequence in extracted_subsequences:
 			extracted_subsequences[subsequence] += 1
 		else:
 			extracted_subsequences[subsequence] = 1
 
-#print(extracted_subsequences)
+# print(extracted_subsequences)
 
 retained_total = 0
 sorted_seq = ((k, extracted_subsequences[k]) for k in
@@ -156,25 +163,25 @@ if PROTEINS:
 	# gather only valid peptide sequences
 	for sequence, count in sorted_seq:
 		try:
-			peptide = Bio.Seq.translate(sequence, gap = '-')
+			peptide = Bio.Seq.translate(sequence, gap='-')
 		except:
 			continue
-		
+
 		if peptide in final_seq_dict:
 			final_seq_dict[peptide] += count
 		else:
 			final_seq_dict[peptide] = count
-		
-		retained_total += count	
+
+		retained_total += count
 else:
 	# DNA sequences
 	final_seq_dict = extracted_subsequences
 	retained_total = total
-	
-#print(final_seq_dict)
+
+# print(final_seq_dict)
 sorted_seq = ((k, final_seq_dict[k]) for k in
 			  sorted(final_seq_dict, key=final_seq_dict.get, reverse=True))
-	
+
 out_file = open(OUTPUT, "wt")
 i = 0
 used = 0
@@ -197,6 +204,6 @@ out_file.close()
 
 try:
 	print("Total reads:    {}".format(total))
-	print("Retained reads: {} ({:.1f}%)".format(used, used/total * 100))
+	print("Retained reads: {} ({:.1f}%)".format(used, used / total * 100))
 except:
 	pass

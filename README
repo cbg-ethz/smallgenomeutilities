@@ -1,0 +1,9 @@
+The SmallGenomeUtilities are a collection of scripts to handle converting and editing NGS data
+
+convert_qr: Converts a QuasiRecomb output file between a transmitter and recipient
+
+convert_reference: Converts a SAM/BAM alignment to a new reference
+
+extract_sam: Extract DNA/Protein sequences from SAM/BAM files
+
+mapper: Map loci from a source to a target genome

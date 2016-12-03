@@ -7,6 +7,7 @@ import Bio.SeqIO
 
 gRange = namedtuple("gRange", "start stop")
 
+
 def convert_from_list_to_intervals(loci):
 	valid_loci = sorted(set(loci))
 
@@ -59,7 +60,7 @@ def find_interval_on_dest(source, dest, list_loci, offset, msa_file, verbose):
 	split_loci = []
 	for i in temp_loci:
 		split_loci.append(i.split('-'))
-	
+
 	source_intervals = convert_from_list_to_intervals(convert_from_intervals_to_list(split_loci))
 
 	# Load genomes from MSA FASTA file
@@ -86,7 +87,7 @@ def find_interval_on_dest(source, dest, list_loci, offset, msa_file, verbose):
 	if not len(source_seq) == len(dest_seq):
 		print("Contigs of '{}' and '{}' are not equal in length, cannot be an MSA!".format(source, dest))
 		sys.exit(0)
-		
+
 	# create SAM POS -> FASTA POS dictionary
 	# for DEST contig
 	sam_to_fasta_map = {}
@@ -95,7 +96,7 @@ def find_interval_on_dest(source, dest, list_loci, offset, msa_file, verbose):
 		if dest_seq[i] != '-':
 			sam_to_fasta_map[pos_in_sam] = i
 			pos_in_sam += 1
-	
+
 	# create FASTA POS -> SAM POS dictionary
 	# for SOURCE contig
 	fasta_to_sam_map = {}
@@ -104,24 +105,24 @@ def find_interval_on_dest(source, dest, list_loci, offset, msa_file, verbose):
 		if source_seq[i] != '-':
 			fasta_to_sam_map[i] = pos_in_sam
 			pos_in_sam += 1
-	
+
 	# find intervals
 	result = []
-	
+
 	for l in source_intervals:
 		dest_fasta_start = sam_to_fasta_map[l.start]
-		
+
 		while not dest_fasta_start in fasta_to_sam_map:
 			dest_fasta_start += 1
 		src_sam_start = fasta_to_sam_map[dest_fasta_start]
-		
+
 		dest_fasta_stop = sam_to_fasta_map[l.stop - 1]
 		while not dest_fasta_stop in fasta_to_sam_map:
 			dest_fasta_stop -= 1
 		src_sam_stop = fasta_to_sam_map[dest_fasta_stop] + 1
-		
+
 		if src_sam_stop > src_sam_start:
 			result.append(gRange(start=src_sam_start, stop=src_sam_stop))
-	
+
 	# simplify list and return
 	return convert_from_list_to_intervals(convert_from_intervals_to_list(result))

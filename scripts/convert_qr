@@ -34,6 +34,7 @@ TRANSLATE_INTO_PROTEIN = args.PROTEIN
 # first round
 invalid_loci = []
 
+
 def load_initial(filename):
 	first_round_sequences = {}
 	for record in Bio.SeqIO.parse(filename, "fasta"):
@@ -91,12 +92,14 @@ def curate_seqs(seqs):
 			final_sequences[new_seq] = details
 	return final_sequences
 
+
 final_trans = curate_seqs(seqs_trans)
 final_recip = curate_seqs(seqs_recip)
 
 # finally, write file
 out_file = open(OUTPUT_FILE, "wt")
 i = 0
+
 
 def write_to_file(seqs, file):
 	# sort by count
@@ -116,6 +119,7 @@ def write_to_file(seqs, file):
 
 		file.write(">{}_{}\n{}\n".format(header, int(10000 * details[0]), sequence))
 		i += 1
+
 
 write_to_file(final_trans, out_file)
 write_to_file(final_recip, out_file)
