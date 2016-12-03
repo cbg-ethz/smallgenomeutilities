@@ -25,7 +25,9 @@ setup(
 		"scripts/convert_qr",
 		"scripts/convert_reference",
 		"scripts/extract_sam",
-		"scripts/mapper"],
+		"scripts/extract_seq",
+		"scripts/mapper",
+		"scripts/remove_gaps_msa"],
 	install_requires=[
 		"biopython",
 		"progress",

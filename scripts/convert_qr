@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 import sys
-import argparse
+
 import Bio.SeqIO
+import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--it", dest="INPUT_TRANS",

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
-import argparse
 import os
 import sys
-import time
 
-import pysam
 import Bio.SeqIO
+import argparse
 import progress.bar
+import pysam
+import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-t", dest="TO", help="Name of target contig", default="", required=True)

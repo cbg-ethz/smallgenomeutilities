@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-from collections import namedtuple
-
-import argparse
-import pysam
 import os
 import sys
+from collections import namedtuple
+
 import Bio.Seq
+import argparse
+import pysam
 
 from SmallGenomeUtilities.__mapper_impl__ import convert_from_intervals_to_list, find_interval_on_dest
 

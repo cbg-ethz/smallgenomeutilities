@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+
+import collections
+import sys
+
+import Bio.SeqIO
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-o", dest="OUTPUT", help="Name of output file to write sequence to", metavar="dest", required=True)
+parser.add_argument("-s", dest="SEQ_ID", help="Sequence name to extract", metavar="name", required=True)
+parser.add_argument("-g", dest="KEEPGAPS", help="Do not remove gaps", default=False, action='store_true')
+parser.add_argument("FILES", nargs=1, metavar="MSA_file", help="file containing MSA")
+args = parser.parse_args()
+
+INPUT_FILE = args.FILES[0]
+OUTPUT_FILE = args.OUTPUT
+SEQ_ID = args.SEQ_ID
+KEEPGAPS = args.KEEPGAPS
+
+fasta_record = collections.namedtuple("fasta_record", "id seq")
+found_seq = False
+
+# read records in input file
+for record in Bio.SeqIO.parse(INPUT_FILE, "fasta"):
+	if SEQ_ID == record.id:
+		sequence = str(record.seq)
+		if not KEEPGAPS:
+			sequence = sequence.replace('-', '')
+
+		new_seq = fasta_record(id=str(record.id), seq=sequence)
+		found_seq = True
+		break
+
+# Write sequence to file
+if found_seq:
+	out_file = open(OUTPUT_FILE, "wt")
+	out_file.write(">{}\n{}\n".format(new_seq.id, new_seq.seq))
+	out_file.close()
+else:
+	sys.exit("Could not find sequence '{}' in '{}'".format(SEQ_ID, INPUT_FILE))
