@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+
+import sys
+from collections import namedtuple
+
+import argparse
+import pysam
+
+from SmallGenomeUtilities.__mapper_impl__ import convert_from_intervals_to_list, find_interval_on_dest
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-t", dest="TO", help="Name of target contig, e.g. HXB2:2253-2256", metavar="dest", required=True)
+parser.add_argument("-i", dest="INPUT", help="Input SAM/BAM file", metavar="input", required=True)
+parser.add_argument("FILES", nargs=1, metavar="MSA_file", help="file containing MSA")
+args = parser.parse_args()
+
+TO_CONTIG = args.TO.split(':', 1)[0]
+COORDINATES = args.TO.split(':', 1)[1]
+MSA_FILE = args.FILES[0]
+
+INPUT = args.INPUT
+
+# 1. load SAM/BAM
+samfile = pysam.AlignmentFile(INPUT, "rb")
+
+# 2. Create source -> dist map
+contig_loci_map = {}
+contig_min_max = {}
+contig_start_end = namedtuple("contig_start_end", "min, max")
+for contig in samfile.references:
+	result = convert_from_intervals_to_list(find_interval_on_dest(contig, TO_CONTIG, COORDINATES, 0, MSA_FILE, False))
+	contig_loci_map[contig] = dict.fromkeys(result, 0)
+	contig_min_max[contig] = contig_start_end(min=result[0], max=result[-1] + 1)
+
+# 3. iterate over reads, adding to coverage
+AlignedReads = 0
+UnalignedReads = 0
+
+for contig in samfile.references:
+	for read in samfile.fetch(reference=contig, start=contig_min_max[contig].min, end=contig_min_max[contig].max):
+		if read.is_unmapped:
+			UnalignedReads += 1
+		else:
+			AlignedReads += 1
+
+			if not read.reference_name in contig_loci_map:
+				sys.exit("Read '{}' has contig '{}', which is not in MSA file '{}'".format(read.query_name,
+																						   read.reference_name,
+																						   MSA_FILE))
+
+			for i in range(read.reference_start, read.reference_end):
+				if i in contig_loci_map[read.reference_name]:
+					contig_loci_map[read.reference_name][i] += 1
+
+# 4. Tally up final stats
+TotalSum = 0
+FinalStats = {}
+
+for contig, loci in contig_loci_map.items():
+	Sum = 0
+	for locus, coverage in loci.items():
+		Sum += coverage
+	Sum /= len(loci)
+
+	FinalStats[contig] = Sum
+	TotalSum += Sum
+
+# 5. Print statistics
+print("{:<15}{:>13}{:>8}".format("Ref", "Ave. Coverage", "%"))
+for contig, coverage in FinalStats.items():
+	if (TotalSum > 0):
+		print("{:<15}{:>13.1f}{:>8.2%}".format(contig, FinalStats[contig], FinalStats[contig] / TotalSum))
+	else:
+		print("{:<15}{:>13.1f}".format(contig, FinalStats[contig]))
+
+print("====================================\n{:<15}{:>13.1f}".format("Total", TotalSum))
