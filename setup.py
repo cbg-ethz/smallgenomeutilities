@@ -2,13 +2,13 @@ from sys import version_info, exit
 from os import path
 from setuptools import setup
 
-# Will only ever support Py3
-if not version_info[0] == 3:
-	exit("Sorry, only Python 3 is supported")
+# Will never support Py2
+if version_info[0] == 2:
+	exit("Sorry, Python 2 is not supported")
 
 # Get the long description from the README file
 here = path.abspath(path.dirname(__file__))
-with open(path.join(here, "README"), encoding='utf-8') as f:
+with open(path.join(here, "README.md"), encoding='utf-8') as f:
 	long_description = f.read()
 
 setup(
