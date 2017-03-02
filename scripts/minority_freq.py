@@ -51,10 +51,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Script to extract minority alleles per samples")
     parser.add_argument("-r", required=True, metavar='ref', dest='ref', 
                         help="Fasta file containing the reference sequence")
-    parser.add_argument("-s", "--start", required=False, default=None, metavar='locus', dest='start', 
-                        help="Starting position of the region to be considered, 0-based indexing")
+    parser.add_argument("-s", "--start", required=False, default=None, metavar='locus', dest='start',
+                        type=int, help="Starting position of the region to be considered, 0-based indexing")
     parser.add_argument("-e", "--end", required=False, default=None, metavar='locus', dest='end',
-                        help="Ending position of the region to be considered, 0-based indexing")
+                        type=int, help="Ending position of the region to be considered, 0-based indexing")
     parser.add_argument("-p", required=False, default=None, metavar='config_file', dest='frames',
                         help="Report minority aminoacids - a .config file specifying reading frames expected")
     parser.add_argument("-c", required=False, default=200000, metavar='coverage', dest='cov', 
@@ -124,20 +124,22 @@ num_samples = len(args.FILES)
 if args.start is None:
     nt_counts = np.zeros(shape=(region_len * alphabet_len, num_samples))
 else:
-    region_length = args.end - args.start + 1
-    nt_counts = np.zeros(shape=(region_len * alphabet_len))
+    region_len = args.end - args.start + 1
+    nt_counts = np.zeros(shape=(region_len * alphabet_len, num_samples))
 
 for i, f in enumerate(args.FILES):
 
     with pysam.AlignmentFile(f, 'rb') as bamfile:
 
         if args.start is not None:
-            # Processing a region in each bamfile
-             for read in bamfile.fetch(args.reference, args.start, args.end):
+            # Processing a region in each bamfile. Fetch returns all reads that cover a specific region
+            # However, all positions - including outside the region of interest - are returned
+             for read in bamfile.fetch(start=args.start, end=args.end):
                 aligned_read = AlignedRead(read)
                 alignment_sequence = np.array(aligned_read.get_alignment_sequence(), dtype='c').view(np.uint8)
                 alignment_sequence = ascii2idx(alignment_sequence)
                 alignment_positions = aligned_read.get_alignment_positions()
+                # TODO alignment_positions > args.start and alignment_positions < args.end
                 # Filter bases that are not in the alphabet
                 alignment_positions = np.delete(alignment_positions, np.where(alignment_sequence >= alphabet_len))
                 alignment_sequence  = np.delete(alignment_sequence, np.where(alignment_sequence >= alphabet_len))
