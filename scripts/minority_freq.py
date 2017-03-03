@@ -5,7 +5,9 @@ import argparse
 import numpy as np
 
 '''
-output: tab-separated file. Minority alleles on the rows and samples as columns
+input:  alignment file(s) as bam file(s) and reference sequence
+output: tab-separated file. Minority alleles on the rows and samples as columns.
+        Loci are reported using 0-based indexing.
 '''
 
 class AlignedRead():
