@@ -30,3 +30,6 @@ Compare sequences from a multiple sequence alignment from transmitter and recipi
 
 ### remove_gaps_msa
 Given a multiple sequence alignment, remove loci with a gap fraction above a certain threshold.
+
+### minority_freq
+Extract frequencies of minority variants from multiple samples. A region of interest is also supported
