@@ -211,9 +211,14 @@ def main():
         # locus is not covered
         nt_freqs_locus = nt_freqs_locus[:, ~mask]
         # NOTE problem when in a given position the frequency is 0.5 for two nucleotides
+        # e.g. loci 2429 (bincounts: [1 1 0 1] and 2463 [1 1 0 1])
         idx_major = nt_freqs_locus.argmax(axis=0)
         if idx_major.size > 1:
-            idx_major = np.bincount(idx_major).argmax()
+            idx_major_aux = np.bincount(idx_major).argmax()
+            if idx_major_aux != np.sum(nt_freqs_locus, axis=1).argmax():
+                print(locus)
+                print(np.bincount(idx_major))
+            idx_major = idx_major_aux
         else:
             idx_major = idx_major[0]
     
