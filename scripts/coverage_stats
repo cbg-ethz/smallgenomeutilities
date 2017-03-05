@@ -61,9 +61,7 @@ for contig in contig_loci_map:
 					contig_loci_map[read.reference_name][i] += 1
 
 # 4. Tally up final stats
-TotalSum = 0
 FinalStats = {}
-
 for contig, loci in contig_loci_map.items():
 	Sum = 0
 	for locus, coverage in loci.items():
@@ -71,21 +69,20 @@ for contig, loci in contig_loci_map.items():
 	Sum /= len(loci)
 
 	FinalStats[contig] = int(Sum)
-	TotalSum += int(Sum)
 
 # 5. Print statistics
 with open(OUTPUT, "w") as output:
 	# header
-	output.write("Name\tTarget%Cov\tTarget%Frac")
+	output.write("Name\tTarget")
 	for i in sorted(contig_loci_map):
 		if i != SELECT_CONTIG:
-			output.write("\t{0}%Cov\t{0}%Frac".format(i))
+			output.write("\t{}".format(i))
 	output.write("\n")
 
 	# data
 	output.write(
-		"{}\t{}\t{:.4f}".format(SELECT_CONTIG, FinalStats[SELECT_CONTIG], FinalStats[SELECT_CONTIG] / TotalSum))
+		"{}\t{}".format(SELECT_CONTIG, FinalStats[SELECT_CONTIG]))
 	for i in sorted(contig_loci_map):
 		if i != SELECT_CONTIG:
-			output.write("\t{}\t{:.4f}".format(FinalStats[i], FinalStats[i] / TotalSum))
+			output.write("\t{}".format(FinalStats[i]))
 	output.write("\n")
