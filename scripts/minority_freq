@@ -56,16 +56,19 @@ class AlignedRead():
 def parse_args():
     """ Set up the parsing of command-line arguments """
     parser = argparse.ArgumentParser(description="Script to extract minority alleles per samples")
-    parser.add_argument("-r", required=True, metavar='FASTA', dest='reference', 
-                        help="Either a fasta file containing the reference sequence or the reference name of the region/chromosome of interest")
+    requiredNamed = parser.add_argument_group('required named arguments')
+    requiredNamed.add_argument("-r", required=True, metavar='FASTA', dest='reference', 
+                               help="Either a fasta file containing the reference sequence or the reference name of the region/chromosome of interest")
     parser.add_argument("-s", "--start", required=False, default=None, metavar='INT', dest='start',
                         type=int, help="Starting position of the region of interest, 0-based indexing")
     parser.add_argument("-e", "--end", required=False, default=None, metavar='INT', dest='end',
-                        type=int, help="Ending position of the region of interest, 0-based indexing")
+            type=int, help="Ending position of the region of interest, 0-based indexing. Note a half-open interval is used, i.e, [start:end)")
     parser.add_argument("-p", required=False, default=None, metavar='file.config', dest='frames',
                         help="Report minority aminoacids - a .config file specifying reading frames expected")
     parser.add_argument("-c", required=False, default=100, metavar='INT', dest='min_coverage', 
                         help="Minimum read depth for reporting variants per locus and sample")
+    parser.add_argument("-N", required=False, default=None, metavar='name1,name2,...', dest="patientIDs", 
+                        help="Patient/sample identifiers as comma separated strings")
     parser.add_argument("-o", required=False, default="output.tsv", metavar='output.tsv', dest='outfile', 
                         help="Output file name") 
     parser.add_argument("FILES", nargs='+', metavar="bamfiles", help="BAM file(s)")
@@ -116,6 +119,9 @@ def main():
         raise SystemExit(0)
      
     num_samples = len(args.FILES)
+
+    if args.patientIDs is not None:
+        patientIDs = args.patientIDs.split(",")
     
     if args.start is None and args.end is None:
         # Length of the reference sequence 
@@ -128,7 +134,7 @@ def main():
         nt_counts = np.zeros(shape=(region_len * alphabet_len, num_samples))
     
     else:
-        region_len = args.end - args.start + 1
+        region_len = args.end - args.start
         reference_name = args.reference
     
         nt_counts = np.zeros(shape=(region_len * alphabet_len, num_samples))
@@ -138,7 +144,7 @@ def main():
     
         with pysam.AlignmentFile(f, 'rb') as bamfile:
     
-            for read in bamfile.fetch(reference=reference_name, start=args.start, end=args.end):
+            for read in bamfile.fetch(reference=reference_name, start=args.start, end=args.end - 1):
                 # Fetch returns all reads which cover an specific region. However,
                 # all positions - including positions outside the region of interest - 
                 # are returned
@@ -148,7 +154,7 @@ def main():
     
                 if args.start is not None and args.end is not None:
                     # Extract region of interest
-                    idxs = (alignment_positions >= args.start) & (alignment_positions <= args.end)
+                    idxs = (alignment_positions >= args.start) & (alignment_positions < args.end)
                     alignment_positions = alignment_positions[idxs]
                     alignment_sequence  = alignment_sequence[idxs]
     
@@ -184,7 +190,7 @@ def main():
     if args.start is None and args.end is None:
         loci = np.arange(region_len)
     else:
-        loci = np.arange(args.start, args.end+1)
+        loci = np.arange(args.start, args.end)
     
     # Exclude loci for which any of the samples report zero counts
     loci = loci[np.sum(coverage, axis=1) > 0] 
@@ -231,8 +237,13 @@ def main():
     ## Write to output file 
     out = np.stack((loci, minor_variants))
     out = np.concatenate((out.T, minor_variants_freqs), axis=1)
-    
-    np.savetxt(args.outfile, out, fmt="%s", delimiter="\t", header="pos\tvariant")
+
+    if args.patientIDs is None:
+        header = "pos\tvariant\t" + "\t".join(str(x) for x in np.arange(num_samples))
+    else:
+        header = "pos\tvariant\t" + "\t".join(patientIDs)
+
+    np.savetxt(args.outfile, out, fmt="%s", delimiter="\t", header=header)
 
 if __name__ == '__main__':
     main()
