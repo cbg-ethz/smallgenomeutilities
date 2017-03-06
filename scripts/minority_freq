@@ -11,6 +11,8 @@ input:  alignment file(s) as Bam file(s) and, either reference sequence in
         directory as the corresponding BAM file.
 output: tab-separated file. Minority alleles on the rows and samples as columns.
         Loci are reported using 0-based indexing.
+        Majority base/aminoacid per loci is identify by summing relative 
+        abundances. 
 '''
 
 class AlignedRead():
@@ -175,6 +177,7 @@ def main():
         # Identify samples with coverage below threshold and discard those read 
         # counts
         mask = coverage[i, ] < args.min_coverage
+        coverage[i, mask] = 0
         nt_freqs[idx_locus:(idx_locus + alphabet_len), ~mask] = nt_counts[idx_locus:(idx_locus + alphabet_len), ~mask] / coverage[i, ~mask]
     
     
@@ -210,18 +213,8 @@ def main():
         # Identify the majority base per locus, and omit samples from which 
         # locus is not covered
         nt_freqs_locus = nt_freqs_locus[:, ~mask]
-        # NOTE problem when in a given position the frequency is 0.5 for two nucleotides
-        # e.g. loci 2429 (bincounts: [1 1 0 1] and 2463 [1 1 0 1])
-        idx_major = nt_freqs_locus.argmax(axis=0)
-        if idx_major.size > 1:
-            idx_major_aux = np.bincount(idx_major).argmax()
-            if idx_major_aux != np.sum(nt_freqs_locus, axis=1).argmax():
-                print(locus)
-                print(np.bincount(idx_major))
-            idx_major = idx_major_aux
-        else:
-            idx_major = idx_major[0]
-    
+        idx_major = np.sum(nt_freqs_locus, axis=1).argmax()
+     
         # Store 'False' for the majority variant
         variant_loci[idx_array:(idx_array + alphabet_len)][idx_major] = False
         
