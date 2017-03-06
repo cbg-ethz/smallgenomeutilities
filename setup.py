@@ -28,6 +28,7 @@ setup(
 		"scripts/extract_sam",
 		"scripts/extract_seq",
 		"scripts/mapper",
+                "scripts/minority_freq",
 		"scripts/pair_sequences",
 		"scripts/remove_gaps_msa",
 	],
@@ -35,6 +36,7 @@ setup(
 		"biopython",
 		"progress",
 		"pysam",
+                "numpy",
 	],
 	long_description=long_description,
 	classifiers=[
