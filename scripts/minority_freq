@@ -71,7 +71,7 @@ def parse_args():
                         help="Patient/sample identifiers as comma separated strings")
     parser.add_argument("-o", required=False, default="output.tsv", metavar='output.tsv', dest='outfile', 
                         help="Output file name") 
-    parser.add_argument("FILES", nargs='+', metavar="bamfiles", help="BAM file(s)")
+    parser.add_argument("FILES", nargs='+', metavar='BAM', help="BAM file(s)")
     
     return parser.parse_args()
 
