@@ -122,6 +122,7 @@ def main():
 
     if args.patientIDs is not None:
         patientIDs = args.patientIDs.split(",")
+        assert len(patientIDs) == num_samples, 'Number of patient/sample identifiers do not match number of BAM files'
     
     if args.start is None and args.end is None:
         # Length of the reference sequence 
