@@ -125,7 +125,9 @@ def main():
     
     if args.start is None and args.end is None:
         # Length of the reference sequence 
-        # Only one reference sequence expected 
+        # Only one reference sequence expected
+        start = args.start
+        end = args.end
         reference = pysam.FastaFile(args.reference)
         assert reference.nreferences == 1, 'Only one reference sequence expected'
         region_len = reference.lengths[0]
@@ -134,7 +136,9 @@ def main():
         nt_counts = np.zeros(shape=(region_len * alphabet_len, num_samples))
     
     else:
-        region_len = args.end - args.start
+        start = args.start
+        end = args.end - 1
+        region_len = end - start + 1
         reference_name = args.reference
     
         nt_counts = np.zeros(shape=(region_len * alphabet_len, num_samples))
@@ -144,7 +148,7 @@ def main():
     
         with pysam.AlignmentFile(f, 'rb') as bamfile:
     
-            for read in bamfile.fetch(reference=reference_name, start=args.start, end=args.end - 1):
+            for read in bamfile.fetch(reference=reference_name, start=start, end=end):
                 # Fetch returns all reads which cover an specific region. However,
                 # all positions - including positions outside the region of interest - 
                 # are returned
@@ -152,9 +156,9 @@ def main():
                 alignment_positions = aligned_read.get_alignment_positions()
                 alignment_sequence = np.array(aligned_read.get_alignment_sequence(), dtype='c').view(np.uint8)
     
-                if args.start is not None and args.end is not None:
+                if start is not None and end is not None:
                     # Extract region of interest
-                    idxs = (alignment_positions >= args.start) & (alignment_positions < args.end)
+                    idxs = (alignment_positions >= start) & (alignment_positions <= end)
                     alignment_positions = alignment_positions[idxs]
                     alignment_sequence  = alignment_sequence[idxs]
     
@@ -166,11 +170,11 @@ def main():
                     alignment_positions = np.delete(alignment_positions, idxs)
                     alignment_sequence  = np.delete(alignment_sequence, idxs)
     
-                if args.start is None and args.end is None:
+                if start is None and end is None:
                     idxs_array = alignment_positions * alphabet_len + alignment_sequence
                 else:
                     # Shift the indexing
-                    idxs_array = (alignment_positions * alphabet_len) + alignment_sequence - (args.start * alphabet_len)
+                    idxs_array = (alignment_positions * alphabet_len) + alignment_sequence - (start * alphabet_len)
     
                 nt_counts[idxs_array, i] += 1          
     
@@ -187,10 +191,10 @@ def main():
         nt_freqs[idx_locus:(idx_locus + alphabet_len), ~mask] = nt_counts[idx_locus:(idx_locus + alphabet_len), ~mask] / coverage[i, ~mask]
     
     
-    if args.start is None and args.end is None:
+    if start is None and end is None:
         loci = np.arange(region_len)
     else:
-        loci = np.arange(args.start, args.end)
+        loci = np.arange(start, end + 1)
     
     # Exclude loci for which any of the samples report zero counts
     loci = loci[np.sum(coverage, axis=1) > 0] 
@@ -199,8 +203,8 @@ def main():
     
     for i, locus in enumerate(loci):
         
-        if args.start is not None:
-            locus = locus - args.start
+        if start is not None:
+            locus = locus - start
         
         # Counts per bases for locus i and for all samples
         idx_locus = locus * alphabet_len
