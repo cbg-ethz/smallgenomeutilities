@@ -107,6 +107,8 @@ def main():
     if read_count > args.counts_thrd:
         output = open(args.outfile, "wt")
         output.write("{patient}\t{date}\n".format(patient=args.sample_id, date=args.sample_date))
+    else: 
+        print("Sample {patient} ({date}) reports a read count of {read_count}, discarding".format(patient=args.sample_id, date=args.sample_date, read_count=read_count)
 
     
 if __name__ == "__main__":
