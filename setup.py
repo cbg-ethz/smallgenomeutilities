@@ -30,6 +30,7 @@ setup(
 		"scripts/mapper",
                 "scripts/minority_freq",
 		"scripts/pair_sequences",
+                "scripts/predict_num_reads",
 		"scripts/remove_gaps_msa",
 	],
 	install_requires=[
