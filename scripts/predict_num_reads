@@ -19,6 +19,8 @@ def parse_args():
                         help="Quality threshold for emulating read trimming")
     parser.add_argument("-c", required=False, default=25000, metavar='INT', dest='counts_thrd', type=int,
                         help="Threshold on the read counts")
+    parser.add_argument("-l", required=False, default=None, metavar='INT', dest='read_len', type=int,
+                        help="Read length. If not specify estimated for every read independently")
     parser.add_argument("-o", required=False, default="output.tsv", metavar='output.tsv', dest='outfile', 
                         help="Output file name") 
     parser.add_argument("FILES", nargs='+', metavar="FASTQ", help='FASTQ files for forward and reverse reads')
@@ -100,9 +102,13 @@ def main():
             len_f1 = trim(qual_f1, read_len_f1, args.window_len, args.qual_thrd)
             len_f2 = trim(qual_f2, read_len_f2, args.window_len, args.qual_thrd) 
 
+            if args.read_len is None:
+                if len_f1 >= np.ceil(0.8 * read_len_f1) and len_f2 >= np.ceil(0.8 * read_len_f2):
+                    read_count += 1
+            else:
+                if len_f1 >= np.ceil(0.8 * args.read_len) and len_f2 >= np.ceil(0.8 * args.read_len):
+                    read_count += 1
 
-            if len_f1 >= np.ceil(0.8*read_len_f1) and len_f2 >= np.ceil(0.8*read_len_f2):
-                read_count += 1
 
     output = open(args.outfile, "wt")
     if read_count > args.counts_thrd:
