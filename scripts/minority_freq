@@ -66,7 +66,7 @@ def parse_args():
     parser.add_argument("-p", required=False, default=None, metavar='file.config', dest='frames',
                         help="Report minority aminoacids - a .config file specifying reading frames expected")
     parser.add_argument("-c", required=False, default=100, metavar='INT', dest='min_coverage', 
-                        help="Minimum read depth for reporting variants per locus and sample")
+                        type=int, help="Minimum read depth for reporting variants per locus and sample")
     parser.add_argument("-N", required=False, default=None, metavar='name1,name2,...', dest="patientIDs", 
                         help="Patient/sample identifiers as comma separated strings")
     parser.add_argument("-o", required=False, default="output.tsv", metavar='output.tsv', dest='outfile', 

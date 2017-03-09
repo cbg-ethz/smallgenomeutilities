@@ -13,11 +13,11 @@ def parse_args():
                                help="Patient/sample identifier")
     requiredNamed.add_argument("-d", required=True, metavar='DATE', dest='sample_date', 
                                help="Sample date")
-    parser.add_argument("-w", required=False, default=10, metavar='INT', dest='window_len', 
+    parser.add_argument("-w", required=False, default=10, metavar='INT', dest='window_len', type=int, 
                         help="Length of the sliding window for emulating read trimming")
-    parser.add_argument("-q", "--qual", required=False, default=30, metavar='INT', dest='qual_thrd',
+    parser.add_argument("-q", "--qual", required=False, default=30, metavar='INT', dest='qual_thrd', type=int,
                         help="Quality threshold for emulating read trimming")
-    parser.add_argument("-c", required=False, default=25000, metavar='INT', dest='counts_thrd',
+    parser.add_argument("-c", required=False, default=25000, metavar='INT', dest='counts_thrd', type=int,
                         help="Threshold on the read counts")
     parser.add_argument("-o", required=False, default="output.tsv", metavar='output.tsv', dest='outfile', 
                         help="Output file name") 
@@ -104,8 +104,8 @@ def main():
             if len_f1 >= np.ceil(0.8*read_len_f1) and len_f2 >= np.ceil(0.8*read_len_f2):
                 read_count += 1
 
+    output = open(args.outfile, "wt")
     if read_count > args.counts_thrd:
-        output = open(args.outfile, "wt")
         output.write("{patient}\t{date}\n".format(patient=args.sample_id, date=args.sample_date))
     else: 
         print("Sample {patient} ({date}) reports a read count of {read_count}, discarding".format(patient=args.sample_id, date=args.sample_date, read_count=read_count))
