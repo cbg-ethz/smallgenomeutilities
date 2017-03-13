@@ -7,7 +7,8 @@ import numpy as np
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Script for predicting number of read pairs after trimming")
+    parser = argparse.ArgumentParser(description="Script for predicting number of read pairs after trimming", 
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument("-n", required=True, metavar='STR', dest='sample_id', 
                                help="Patient/sample identifier")

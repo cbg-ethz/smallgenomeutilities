@@ -56,7 +56,8 @@ class AlignedRead():
 
 def parse_args():
     """ Set up the parsing of command-line arguments """
-    parser = argparse.ArgumentParser(description="Script to extract minority alleles per samples")
+    parser = argparse.ArgumentParser(description="Script to extract minority alleles per samples", 
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument("-r", required=True, metavar='FASTA', dest='reference', 
                                help="Either a fasta file containing the reference sequence or the reference name of the region/chromosome of interest")
