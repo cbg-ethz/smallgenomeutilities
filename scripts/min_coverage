@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+
+import sys
+from collections import namedtuple
+from operator import itemgetter
+
+import argparse
+import pysam
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "-t", dest="TO", help="Name of target contig, e.g. HXB2:2253-2256", metavar="dest", required=True)
+parser.add_argument("-i", dest="INPUT",
+                    help="Input SAM/BAM file", metavar="input", required=True)
+args = parser.parse_args()
+
+TO_CONTIG = args.TO.split(':', 1)[0]
+COORDINATES = args.TO.split(':', 1)[1].split('-')
+START_COORD = int(COORDINATES[0])
+END_COORD = int(COORDINATES[1])
+
+INPUT = args.INPUT
+
+# determine coverages
+AlignedReads = 0
+UnalignedReads = 0
+
+coverages_nonzero = []
+
+with pysam.AlignmentFile(INPUT, "rb") as samfile:
+    for pileupcolumn in samfile.pileup(TO_CONTIG, START_COORD, END_COORD):
+        if START_COORD <= pileupcolumn.pos < END_COORD:
+            coverages_nonzero.append(pileupcolumn.n)
+
+num_nonzero_loci = len(coverages_nonzero)
+
+print(min(coverages_nonzero) if num_nonzero_loci ==
+      END_COORD - START_COORD else 0)
