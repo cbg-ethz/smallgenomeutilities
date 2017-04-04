@@ -26,6 +26,7 @@ setup(
         "scripts/convert_qr",
         "scripts/convert_reference",
         "scripts/coverage_stats",
+        "scripts/extract_coverage_intervals",
         "scripts/extract_sam",
         "scripts/extract_seq",
         "scripts/mapper",
@@ -37,9 +38,9 @@ setup(
     ],
     install_requires=[
         "biopython",
+        "numpy",
         "progress",
         "pysam",
-        "numpy",
     ],
     long_description=long_description,
     classifiers=[

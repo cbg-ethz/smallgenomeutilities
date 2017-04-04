@@ -3,6 +3,7 @@ The SmallGenomeUtilities are a collection of scripts that is useful for dealing 
 
 ## Dependencies
 - biopython
+- numpy
 - progress
 - pysam
 
@@ -16,6 +17,9 @@ Perform a genomic liftover. Transform an alignment in SAM or BAM format from one
 ### coverage_stats
 Calculate average coverage for a target region of an alignment.
 
+### extract_coverage_intervals
+Extract regions with sufficient coverage for running ShoRAH.
+
 ### extract_sam
 Extract subsequences of an alignment, with the option of converting it to peptide sequences. Can filter on the basis of subsequence frequency or gap frequencies in subsequences.
 
@@ -25,11 +29,12 @@ Extract sequences of alignments into a FASTA file where the sequence id matches 
 ### mapper
 Determine the genomic offsets on a target contig, given an initial contig and offsets. Can be used to map between reference genomes.
 
+### minority_freq
+Extract frequencies of minority variants from multiple samples. A region of interest is also supported.
+
 ### pair_sequences
 Compare sequences from a multiple sequence alignment from transmitter and recipient samples in order to determine the optimal matching of transmitters to recipients.
 
 ### remove_gaps_msa
 Given a multiple sequence alignment, remove loci with a gap fraction above a certain threshold.
 
-### minority_freq
-Extract frequencies of minority variants from multiple samples. A region of interest is also supported.
