@@ -2,6 +2,7 @@
 
 import pysam 
 import argparse
+import os
 import numpy as np
 from multiprocessing import Pool
 
@@ -54,6 +55,21 @@ class AlignedRead():
         return np.arange(self.read.reference_start, self.read.reference_end)
 
 
+class CheckPath(argparse.Action):
+
+    def __call__(self, parser, namespace, values, option_string=None):
+
+        path = values
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        if os.access(path, os.W_OK):
+            setattr(namespace, self.dest, path)
+        else:
+            raise argparse.ArgumentTypeError("CheckPath:{0} is not a writable directory".format(path))
+        
+
 def parse_args():
     """ Set up the parsing of command-line arguments """
     parser = argparse.ArgumentParser(description="Script to extract minority alleles per samples", 
@@ -65,7 +81,7 @@ def parse_args():
                         type=int, help="Starting position of the region of interest, 0-based indexing")
     parser.add_argument("-e", "--end", required=False, default=None, metavar='INT', dest='end',
             type=int, help="Ending position of the region of interest, 0-based indexing. Note a half-open interval is used, i.e, [start:end)")
-    parser.add_argument("-p", required=False, default=None, metavar='file.config', dest='frames',
+    parser.add_argument("-p", "--config", required=False, default=None, metavar='file.config', dest='frames',
                         help="Report minority aminoacids - a .config file specifying reading frames expected")
     parser.add_argument("-c", required=False, default=100, metavar='INT', dest='min_coverage', 
                         type=int, help="Minimum read depth for reporting variants per locus and sample")
@@ -73,8 +89,8 @@ def parse_args():
                         help="Patient/sample identifiers as comma separated strings")
     parser.add_argument("-t", required=False, default=1, metavar='INT', dest='thrds', type=int,  
                         help="Number of threads")
-    parser.add_argument("-o", required=False, default="output.tsv", metavar='output.tsv', dest='outfile', 
-                        help="Output file name") 
+    parser.add_argument("-o", required=False, default=os.getcwd(), action=CheckPath, metavar='PATH', dest='outdir',
+                        help="Output directory")
     parser.add_argument("FILES", nargs='+', metavar='BAM', help="BAM file(s)")
     
     return parser.parse_args()
@@ -139,7 +155,7 @@ def get_counts(args): #bamfile, reference_name, start, end, region_len, alphabet
     
                 nt_counts[idxs_array] += 1
 
-    return(nt_counts)
+    return nt_counts
     
     
 def main():
@@ -165,7 +181,7 @@ def main():
         raise SystemExit(0)
      
     num_samples = len(args.FILES)
-
+    
     if args.patientIDs is not None:
         patientIDs = args.patientIDs.split(",")
         assert len(patientIDs) == num_samples, 'Number of patient/sample identifiers do not match number of BAM files'
@@ -186,7 +202,7 @@ def main():
         region_len = end - start + 1
         reference_name = args.reference
     
-  
+    
     args_list = [(bamfile, reference_name, start, end, region_len, alphabet_len) for bamfile in args.FILES]
     pool = Pool(processes=args.thrds)
     res = pool.map(get_counts, args_list)
@@ -196,31 +212,34 @@ def main():
     nt_counts = np.vstack(res).T
     
     coverage = np.zeros(shape=(region_len, num_samples), dtype=int)
+    coverage_raw = np.zeros(shape=(region_len, num_samples), dtype=int)
     nt_freqs = np.zeros(shape=(region_len * alphabet_len, num_samples))
+    
     for i in range(region_len):
         idx_locus = i * alphabet_len
-        coverage[i, ] = np.sum(nt_counts[idx_locus:(idx_locus + alphabet_len), ], axis=0)
+        coverage_raw[i, ] = np.sum(nt_counts[idx_locus:(idx_locus + alphabet_len), ], axis=0)
         # Identify samples with coverage below threshold and discard those read 
         # counts
-        mask = coverage[i, ] < args.min_coverage
+        mask = coverage_raw[i, ] < args.min_coverage
+        coverage[i, ] = coverage_raw[i, ]
         coverage[i, mask] = 0
         nt_freqs[idx_locus:(idx_locus + alphabet_len), ~mask] = nt_counts[idx_locus:(idx_locus + alphabet_len), ~mask] / coverage[i, ~mask]
     
     
     if start is None and end is None:
-        loci = np.arange(region_len)
+        pos = np.arange(region_len)
     else:
-        loci = np.arange(start, end + 1)
+        pos = np.arange(start, end + 1)
     
-    # Exclude loci for which any of the samples report zero counts
-    loci = loci[np.sum(coverage, axis=1) > 0] 
+    # Exclude loci for which all samples report zero counts
+    loci = pos[np.sum(coverage, axis=1) > 0] 
     variant_loci = np.zeros(shape=loci.size * alphabet_len).astype(bool)
     minor_variants_freqs = np.zeros(shape=(variant_loci.size, num_samples)) 
     
     for i, locus in enumerate(loci):
         
         if start is not None:
-            locus = locus - start
+            locus -= start
         
         # Counts per bases for locus i and for all samples
         idx_locus = locus * alphabet_len
@@ -233,17 +252,18 @@ def main():
         variant_loci[idx_array:(idx_array + alphabet_len)] = np.sum(nt_freqs_locus, axis=1) > 0
         minor_variants_freqs[idx_array:(idx_array + alphabet_len), ] = nt_freqs_locus
         
-        # Identify samples from which current locus was not covered
+        # Identify samples for which current locus doesn't report 'min_coverage'
         mask = coverage[locus, ] == 0
-        
-        # Identify the majority base per locus, and omit samples from which 
+        minor_variants_freqs[idx_array:(idx_array + alphabet_len), mask] = np.nan
+    
+        # Identify the majority base per locus, and omit samples for which 
         # locus is not covered
         nt_freqs_locus = nt_freqs_locus[:, ~mask]
         idx_major = np.sum(nt_freqs_locus, axis=1).argmax()
      
         # Store 'False' for the majority variant
         variant_loci[idx_array:(idx_array + alphabet_len)][idx_major] = False
-        
+    
     
     # Instantiate arrays
     minor_variants = np.tile(alphabet, loci.size)
@@ -254,16 +274,35 @@ def main():
     minor_variants_freqs = minor_variants_freqs[variant_loci, ]
     loci = loci[variant_loci]
     
-    ## Write to output file 
-    out = np.stack((loci, minor_variants))
-    out = np.concatenate((out.T, minor_variants_freqs), axis=1)
-
+    ## Write to output file
     if args.patientIDs is None:
         header = "pos\tvariant\t" + "\t".join(str(x) for x in np.arange(num_samples))
     else:
         header = "pos\tvariant\t" + "\t".join(patientIDs)
-
-    np.savetxt(args.outfile, out, fmt="%s", delimiter="\t", header=header)
+    
+    type_string = 'i8,S8,' + ','.join('f8' for x in np.arange(num_samples))
+    out = np.zeros(loci.size, dtype=type_string)
+    for i_idx in range(loci.size):
+        out[i_idx][0] = loci[i_idx]
+        out[i_idx][1] = minor_variants[i_idx]
+        for j_idx in range(num_samples):
+            out[i_idx][2 + j_idx] = minor_variants_freqs[i_idx, j_idx]
+    
+    fmt_string = '%d %s ' + ' '.join('%.6e' for x in np.arange(num_samples))
+    np.savetxt(os.path.join(args.outdir, 'minority_variants.tsv'), out,
+               fmt='%d %s %.6e %.6e', delimiter='\t', header=header)
+    
+    ## Write to output file coverage per locus
+    out2 = np.concatenate((pos[:, np.newaxis], coverage_raw), axis=1)
+    if args.patientIDs is None:
+        header = "pos\t" + "\t".join(str(x) for x in np.arange(num_samples))
+    else:
+        header = "pos\t" + "\t".join(patientIDs)
+    
+    
+    np.savetxt(os.path.join(args.outdir, 'coverage.tsv'), out2, fmt='%d', 
+               delimiter='\t', header=header)
+    
 
 if __name__ == '__main__':
     main()
