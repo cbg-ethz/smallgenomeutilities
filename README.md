@@ -18,7 +18,7 @@ Perform a genomic liftover. Transform an alignment in SAM or BAM format from one
 Calculate average coverage for a target region of an alignment.
 
 ### extract_coverage_intervals
-Extract regions with sufficient coverage for running ShoRAH.
+Extract regions with sufficient coverage for running ShoRAH. Half-open intervals are returned, [start:end), and 0-based indexing is used.
 
 ### extract_sam
 Extract subsequences of an alignment, with the option of converting it to peptide sequences. Can filter on the basis of subsequence frequency or gap frequencies in subsequences.

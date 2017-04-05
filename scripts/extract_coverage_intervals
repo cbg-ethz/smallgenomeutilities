@@ -15,7 +15,7 @@ def parse_args():
     parser.add_argument("-c", required=False, default=100, metavar='INT', dest='min_coverage',
                         type=int, help="Minimum read depth for reporting variants per locus and sample")
     parser.add_argument("-w", required=False, default=201, metavar='INT', dest='offset',
-                        type=int, help="Offset used by ShoRAH to construct windows")
+                        type=int, help="Offset used by ShoRAH to construct overlapping windows")
     parser.add_argument("-N", required=False, default=None, metavar='name1,name2,...', dest="patientIDs",
                         help="Patient/sample identifiers as comma separated strings")
     parser.add_argument("-o", required=False, default="coverage_intervals.tsv", metavar='coverage_intervals.tsv', dest='outfile',
@@ -43,18 +43,29 @@ def nonzero_intervals(x, offset, start=None):
     if start is not None:
         intervals += start
 
+    intervals_start = intervals[::2] 
+    intervals_end   = intervals[1::2]
+    
     # NOTE: ShoRAH adds or subtracts 3 * (window-length / window-shift), in
     #       order to ensure that every locus in the target region is covered by
-    #       3 window. By default overlapping windows are offset by
-    #       window-length / 3.
+    #       3 window. By default, window-shift is set to 3, meaning that 
+    #       overlapping windows are shifted by window-length / 3. In this 
+    #       settings the ofsset is equivalent to the window length
+
+    # Check original intervals are at least the window length
+    length = intervals_end - intervals_start
+
+    mask = length < offset
+    intervals_start = intervals_start[~mask]
+    intervals_end   = intervals_end[~mask]
 
     # Add offset to starting position.
-    intervals[::2] += offset
+    intervals_start += offset
 
     # Subtract offset to ending position.
-    intervals[1::2] -= offset
+    intervals_end -= offset
 
-    intervals = np.vstack((intervals[::2], intervals[1::2])).T
+    intervals = np.vstack((intervals_start, intervals_end)).T
 
     return intervals
 
