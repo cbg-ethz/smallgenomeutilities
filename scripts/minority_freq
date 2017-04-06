@@ -76,7 +76,7 @@ def parse_args():
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument("-r", required=True, metavar='FASTA', dest='reference',
-                               help="Either a fasta file containing the reference sequence or the reference name of the region/chromosome of interest")
+                               help="Either a fasta file containing a reference sequence or the reference name of the region/chromosome of interest. The latter is expected if a region is specified")
     parser.add_argument("-s", "--start", required=False, default=None, metavar='INT', dest='start',
                         type=int, help="Starting position of the region of interest, 0-based indexing")
     parser.add_argument("-e", "--end", required=False, default=None, metavar='INT', dest='end',
@@ -117,7 +117,7 @@ def ascii2idx(sequence):
     return sequence
 
 
-def get_counts(args): #bamfile, reference_name, start, end, region_len, alphabet_len):
+def get_counts(args): 
 
     bamfile, reference_name, start, end, region_len, alphabet_len = args
 
