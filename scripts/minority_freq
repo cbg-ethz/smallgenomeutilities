@@ -278,7 +278,7 @@ def main():
         patientIDs = "\t".join(patientIDs)
     header = "pos\tvariant\t" +  patientIDs
 
-    type_string = 'i8,S8,' + ','.join('f8' for x in np.arange(num_samples))
+    type_string = 'i8,U8,' + ','.join('f8' for x in np.arange(num_samples))
     out = np.zeros(loci.size, dtype=type_string)
     for i_idx in range(loci.size):
         out[i_idx][0] = loci[i_idx]
