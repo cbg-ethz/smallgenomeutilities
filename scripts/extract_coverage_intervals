@@ -20,8 +20,8 @@ def parse_args():
 
     parser.add_argument("-c", required=False, default=100, metavar='INT', dest='min_coverage',
                         type=int, help="Minimum read depth for reporting variants per locus and sample")
-    parser.add_argument("-w", required=False, default=201, metavar='INT', dest='offset',
-                        type=int, help="Offset used by ShoRAH to construct overlapping windows")
+    parser.add_argument("-w", required=False, default='201', metavar='len1,len2,...', dest='offset',
+                        help="Offset used by ShoRAH to construct overlapping windows")
     parser.add_argument("-N", required=False, default=None, metavar='name1,name2,...', dest="patientIDs",
                         help="Patient/sample identifiers as comma separated strings")
     parser.add_argument("-o", required=False, default="coverage_intervals.tsv", metavar='OUTPUT', dest='outfile',
@@ -112,13 +112,18 @@ else:
 
 assert len(patientIDs) == num_samples, 'Number of patient/sample identifiers do not match number of columns in input file.'
 
+offset = args.offset.split(",")
+
+assert len(offset) == num_samples, 'Number of input values do not match number of columns in input file.'
+
+
 with open(args.outfile, "wt") as outfile:
 
     for idx in range(num_samples):
         # Identify samples with coverage below threshold and discard those read counts
         mask = coverage[:, idx] < args.min_coverage
         coverage[mask, idx] = 0
-        intervals = nonzero_intervals(coverage[:, idx], args.offset, loci[0])
+        intervals = nonzero_intervals(coverage[:, idx], int(offset[0]), loci[0])
 
         outfile.write("{}\t{}\n".format(patientIDs[idx],
                       ','.join("{}:{}-{}".format(reference_name, x[0], x[1]) for x in intervals)))
