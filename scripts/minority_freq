@@ -199,12 +199,14 @@ def main():
         assert reference.nreferences == 1, 'Only one reference sequence expected'
         region_len = reference.lengths[0]
         reference_name = reference.references[0]
+        cohort_consensus = reference.fetch(reference=reference_name).lower()
     
     else:
         start = args.start
         end = args.end - 1
         region_len = end - start + 1
         reference_name = args.reference
+        cohort_consensus = 'n' * region_len
     
     args_list = [(bamfile, reference_name, start, end, region_len, alphabet_len) for bamfile in args.FILES]
     pool = Pool(processes=args.thrds)
@@ -242,6 +244,8 @@ def main():
     if args.freqs:
         minor_variants = np.tile(alphabet, loci.size)
         loci_tile = np.repeat(loci, alphabet_len)
+        if start is not None:
+            loci_tile = loci_tile - start
         aux = nt_freqs[(loci_tile * alphabet_len) + np.tile(np.arange(alphabet_len), loci.size)]
         
         type_string = 'i8,U8,' + ','.join('f8' for x in np.arange(num_samples))
@@ -254,7 +258,7 @@ def main():
     
         np.save(os.path.join(args.outdir, 'frequencies.npy'), out)
     
-    
+    # Extract minority variants 
     for i, locus in enumerate(loci):
     
         if start is not None:
@@ -282,6 +286,8 @@ def main():
     
         # Store 'False' for the majority variant
         variant_loci[idx_array:(idx_array + alphabet_len)][idx_major] = False
+        cohort_consensus = cohort_consensus[:locus] + alphabet[idx_major] + cohort_consensus[(locus+1):]
+    
     
     # Instantiate arrays
     minor_variants = np.tile(alphabet, loci.size)
@@ -310,6 +316,14 @@ def main():
     fmt_string = '%d %s ' + ' '.join('%.6e' for x in np.arange(num_samples))
     np.savetxt(os.path.join(args.outdir, 'minority_variants.tsv'), out,
                fmt=fmt_string, delimiter='\t', header=header)
+    
+    ## Write to output file cohort-consensus
+    with open(os.path.join(args.outdir, 'cohort_consensus.fasta'), 'w') as outfile:
+        if start is None and end is None:
+            outfile.write(">consensus|{}\n".format(reference_name))
+        else:
+            outfile.write(">consensus|{}:{}-{}\n".format(reference_name, start, end))
+        outfile.write(cohort_consensus)
     
     ## Write to output file coverage per locus
     if args.coverage:
