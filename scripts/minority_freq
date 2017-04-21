@@ -89,7 +89,7 @@ def parse_args():
                         help="Patient/sample identifiers as comma separated strings")
     parser.add_argument("-t", required=False, default=1, metavar='INT', dest='thrds', type=int,
                         help="Number of threads")
-    parser.add_argument("-f", "--freqs", required=False, action='store_true', dest='freqs', 
+    parser.add_argument("-f", "--freqs", required=False, action='store_true', dest='freqs',
                         help="Indicates whether or not all frequencies should be stored")
     parser.add_argument("-d", required=False, action='store_true', dest='coverage',
                         help="Indicates wheter coverage per locus should be output")
@@ -121,7 +121,7 @@ def ascii2idx(sequence):
     return sequence
 
 
-def get_counts(args): 
+def get_counts(args):
 
     bamfile, reference_name, start, end, region_len, alphabet_len = args
 
@@ -164,15 +164,15 @@ def get_counts(args):
 
 def main():
     args = parse_args()
-    
+
     if args.start is not None:
         assert args.end is not None, 'Minority variants are extracted from a region of interest. An ending position was expected'
-    
+
     if args.end is not None:
         if args.start is None:
             print('Starting position was expected. Setting it to 0')
             args.start = 0
-    
+
     if args.frames is None:
         # Nucleotides - Alphabet = {A, C, G, T, -}, including deletions
         alphabet = np.array(['A', 'C', 'G', 'T', '-'])
@@ -183,13 +183,13 @@ def main():
         alphabet_len = alphabet.size
         print("Option not implemented yet")
         raise SystemExit(0)
-    
+
     num_samples = len(args.FILES)
-    
+
     if args.patientIDs is not None:
         patientIDs = args.patientIDs.split(",")
         assert len(patientIDs) == num_samples, 'Number of patient/sample identifiers do not match number of BAM files'
-    
+
     if args.start is None and args.end is None:
         # Length of the reference sequence
         # Only one reference sequence expected
@@ -200,26 +200,26 @@ def main():
         region_len = reference.lengths[0]
         reference_name = reference.references[0]
         cohort_consensus = reference.fetch(reference=reference_name).lower()
-    
+
     else:
         start = args.start
         end = args.end - 1
         region_len = end - start + 1
         reference_name = args.reference
         cohort_consensus = 'n' * region_len
-    
+
     args_list = [(bamfile, reference_name, start, end, region_len, alphabet_len) for bamfile in args.FILES]
     pool = Pool(processes=args.thrds)
     res = pool.map(get_counts, args_list)
     pool.close()
     pool.join()
-    
+
     nt_counts = np.vstack(res).T
-    
+
     coverage = np.zeros(shape=(region_len, num_samples), dtype=int)
     coverage_raw = np.zeros(shape=(region_len, num_samples), dtype=int)
     nt_freqs = np.zeros(shape=(region_len * alphabet_len, num_samples))
-    
+
     for i in range(region_len):
         idx_locus = i * alphabet_len
         coverage_raw[i, ] = np.sum(nt_counts[idx_locus:(idx_locus + alphabet_len), ], axis=0)
@@ -229,25 +229,25 @@ def main():
         coverage[i, ] = coverage_raw[i, ]
         coverage[i, mask] = 0
         nt_freqs[idx_locus:(idx_locus + alphabet_len), ~mask] = nt_counts[idx_locus:(idx_locus + alphabet_len), ~mask] / coverage[i, ~mask]
-    
+
     if start is None and end is None:
         pos = np.arange(region_len)
     else:
         pos = np.arange(start, end + 1)
-    
+
     # Exclude loci for which all samples report zero counts
     loci = pos[np.sum(coverage, axis=1) > 0]
     variant_loci = np.zeros(shape=loci.size * alphabet_len).astype(bool)
     minor_variants_freqs = np.zeros(shape=(variant_loci.size, num_samples))
-    
-    ## Write matrix of frequencies per locus and per sample 
+
+    ## Write matrix of frequencies per locus and per sample
     if args.freqs:
         minor_variants = np.tile(alphabet, loci.size)
         loci_tile = np.repeat(loci, alphabet_len)
         if start is not None:
             loci_tile = loci_tile - start
         aux = nt_freqs[(loci_tile * alphabet_len) + np.tile(np.arange(alphabet_len), loci.size)]
-        
+
         type_string = 'i8,U8,' + ','.join('f8' for x in np.arange(num_samples))
         out = np.zeros(loci_tile.size, dtype=type_string)
         for i_idx in range(loci_tile.size):
@@ -255,56 +255,56 @@ def main():
             out[i_idx][1] = minor_variants[i_idx]
             for j_idx in range(num_samples):
                 out[i_idx][2 + j_idx] = aux[i_idx, j_idx]
-    
+
         np.save(os.path.join(args.outdir, 'frequencies.npy'), out)
-    
-    # Extract minority variants 
+
+    # Extract minority variants
     for i, locus in enumerate(loci):
-    
+
         if start is not None:
             locus -= start
-    
+
         # Counts per bases for locus i and for all samples
         idx_locus = locus * alphabet_len
         nt_freqs_locus = nt_freqs[idx_locus:(idx_locus + alphabet_len), ]
-    
+
         # Identify variants: bases reporting at least <min_coverage count> for one
         # of the samples. Store 'True' if the sum of nucleotide frequencies across
         # sample is larger than 0.
         idx_array = i * alphabet_len
         variant_loci[idx_array:(idx_array + alphabet_len)] = np.sum(nt_freqs_locus, axis=1) > 0
         minor_variants_freqs[idx_array:(idx_array + alphabet_len), ] = nt_freqs_locus
-    
+
         # Identify samples for which current locus doesn't report 'min_coverage'
         mask = coverage[locus, ] == 0
         minor_variants_freqs[idx_array:(idx_array + alphabet_len), mask] = np.nan
-    
+
         # Identify the majority base per locus, and omit samples for which
         # locus is not covered
         nt_freqs_locus = nt_freqs_locus[:, ~mask]
         idx_major = np.sum(nt_freqs_locus, axis=1).argmax()
-    
+
         # Store 'False' for the majority variant
         variant_loci[idx_array:(idx_array + alphabet_len)][idx_major] = False
         cohort_consensus = cohort_consensus[:locus] + alphabet[idx_major] + cohort_consensus[(locus+1):]
-    
-    
+
+
     # Instantiate arrays
     minor_variants = np.tile(alphabet, loci.size)
     loci = np.repeat(loci, alphabet_len)
-    
+
     # Exclude bases with zero counts for all samples, as well as majority bases
     minor_variants = minor_variants[variant_loci]
     minor_variants_freqs = minor_variants_freqs[variant_loci, ]
     loci = loci[variant_loci]
-    
+
     ## Write to output file
     if args.patientIDs is None:
         patientIDs = "\t".join(str(x) for x in np.arange(num_samples))
     else:
         patientIDs = "\t".join(patientIDs)
     header = "pos\tvariant\t" +  patientIDs
-    
+
     type_string = 'i8,U8,' + ','.join('f8' for x in np.arange(num_samples))
     out = np.zeros(loci.size, dtype=type_string)
     for i_idx in range(loci.size):
@@ -312,24 +312,24 @@ def main():
         out[i_idx][1] = minor_variants[i_idx]
         for j_idx in range(num_samples):
             out[i_idx][2 + j_idx] = minor_variants_freqs[i_idx, j_idx]
-    
+
     fmt_string = '%d %s ' + ' '.join('%.6e' for x in np.arange(num_samples))
     np.savetxt(os.path.join(args.outdir, 'minority_variants.tsv'), out,
                fmt=fmt_string, delimiter='\t', header=header)
-    
-    ## Write to output file cohort-consensus
+
+    ## Write to output file cohort-consensus. Consensus is with respect to HXB2 
     with open(os.path.join(args.outdir, 'cohort_consensus.fasta'), 'w') as outfile:
         if start is None and end is None:
-            outfile.write(">consensus|{}\n".format(reference_name))
+            outfile.write(">{}\n".format(reference_name))
         else:
-            outfile.write(">consensus|{}:{}-{}\n".format(reference_name, start, end))
+            outfile.write(">{}:{}-{}\n".format(reference_name, start, end))
         outfile.write(cohort_consensus)
-    
+
     ## Write to output file coverage per locus
     if args.coverage:
         out = np.concatenate((pos[:, np.newaxis], coverage_raw), axis=1)
         header = "pos\t" + patientIDs
-    
+
         np.savetxt(os.path.join(args.outdir, 'coverage.tsv'), out, fmt='%d',
                    delimiter='\t', header=header)
 
