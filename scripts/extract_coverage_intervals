@@ -50,7 +50,7 @@ def nonzero_intervals(x, offset, start=None):
         intervals += start
 
     intervals_start = intervals[::2]
-    intervals_end   = intervals[1::2]
+    intervals_end = intervals[1::2]
 
     # NOTE: ShoRAH adds or subtracts 3 * (window-length / window-shift), in
     #       order to ensure that every locus in the target region is covered by
@@ -63,7 +63,7 @@ def nonzero_intervals(x, offset, start=None):
 
     mask = length < offset
     intervals_start = intervals_start[~mask]
-    intervals_end   = intervals_end[~mask]
+    intervals_end = intervals_end[~mask]
 
     # Add offset to starting position.
     intervals_start += offset
@@ -76,7 +76,7 @@ def nonzero_intervals(x, offset, start=None):
     return intervals
 
 
-## MAIN PROGRAM
+# MAIN PROGRAM
 args = parse_args()
 
 # Get name of the reference
@@ -114,17 +114,19 @@ assert len(patientIDs) == num_samples, 'Number of patient/sample identifiers do 
 
 offset = args.offset.split(",")
 
-assert len(offset) == num_samples, 'Number of input values do not match number of columns in input file.'
+assert len(
+    offset) == num_samples, 'Number of input values do not match number of columns in input file.'
 
 
 with open(args.outfile, "wt") as outfile:
 
     for idx in range(num_samples):
-        # Identify samples with coverage below threshold and discard those read counts
+        # Identify samples with coverage below threshold and discard those read
+        # counts
         mask = coverage[:, idx] < args.min_coverage
         coverage[mask, idx] = 0
-        intervals = nonzero_intervals(coverage[:, idx], int(offset[0]), loci[0])
+        intervals = nonzero_intervals(
+            coverage[:, idx], int(offset[0]), loci[0])
 
         outfile.write("{}\t{}\n".format(patientIDs[idx],
-                      ','.join("{}:{}-{}".format(reference_name, x[0], x[1]) for x in intervals)))
-
+                                        ','.join("{}:{}-{}".format(reference_name, x[0], x[1]) for x in intervals)))
