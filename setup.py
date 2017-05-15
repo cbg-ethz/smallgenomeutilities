@@ -25,6 +25,7 @@ setup(
     scripts=[
         "scripts/convert_qr",
         "scripts/convert_reference",
+        "scripts/coverage",
         "scripts/coverage_stats",
         "scripts/extract_coverage_intervals",
         "scripts/extract_sam",
