@@ -8,7 +8,7 @@ import Bio.Seq
 import argparse
 import pysam
 
-from SmallGenomeUtilities.__mapper_impl__ import convert_from_intervals_to_list, find_interval_on_dest
+from smallgenomeutilities.__mapper_impl__ import convert_from_intervals_to_list, find_interval_on_dest
 
 parser = argparse.ArgumentParser()
 parser.add_argument(

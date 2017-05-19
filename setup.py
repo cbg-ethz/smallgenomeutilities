@@ -12,7 +12,7 @@ with open(path.join(here, "README.md"), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name="SmallGenomeUtilities",
+    name="smallgenomeutilities",
     version="0.0.1",
     author="David Seifert",
     author_email="david.seifert@bsse.ethz.ch",
@@ -20,8 +20,8 @@ setup(
         "A collection of scripts that are useful for dealing with viral RNA NGS data."),
     license="GPL2+",
     keywords="NGS SAM BAM HIV-1 alignment",
-    url="https://github.com/SoapZA/SmallGenomeUtilities",
-    packages=["SmallGenomeUtilities"],
+    url="https://github.com/cbg-ethz/smallgenomeutilities",
+    packages=["smallgenomeutilities"],
     scripts=[
         "scripts/convert_qr",
         "scripts/convert_reference",
