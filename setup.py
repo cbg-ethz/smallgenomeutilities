@@ -6,10 +6,12 @@ from setuptools import setup
 if version_info[0] == 2:
     exit("Sorry, Python 2 is not supported")
 
-# Get the long description from the README file
-here = path.abspath(path.dirname(__file__))
-with open(path.join(here, "README.rst"), encoding='utf-8') as f:
-    long_description = f.read()
+
+# Get the long description from the README file lazily
+def readme():
+    here = path.abspath(path.dirname(__file__))
+    with open(path.join(here, "README.rst"), encoding='utf-8') as f:
+        return f.read()
 
 setup(
     name="smallgenomeutilities",
@@ -44,7 +46,7 @@ setup(
         "pysam",
     ],
     include_package_data=True,
-    long_description=long_description,
+    long_description=readme(),
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
