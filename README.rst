@@ -69,3 +69,11 @@ Compare sequences from a multiple sequence alignment from transmitter and recipi
 remove_gaps_msa
 ---------------
 Given a multiple sequence alignment, remove loci with a gap fraction above a certain threshold.
+
+
+*************
+Contributions
+*************
+
+- David Seifert <david.seifert@bsse.ethz.ch>
+- Susana Posada Cespedes <susana.posada@bsse.ethz.ch>
