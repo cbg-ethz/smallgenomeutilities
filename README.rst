@@ -36,7 +36,11 @@ Convert QuasiRecomb output of a transmitter and recipient set of haplotypes to a
 
 convert_reference
 -----------------
-Perform a genomic liftover. Transform an alignment in SAM or BAM format from one reference sequence to another. Can replace `M` states by `=`/`X`
+Perform a genomic liftover. Transform an alignment in SAM or BAM format from one reference sequence to another. Can replace `M` states by `=`/`X`.
+
+coverage
+--------
+Calculate average coverage for a target region on a different contig.
 
 coverage_stats
 --------------
