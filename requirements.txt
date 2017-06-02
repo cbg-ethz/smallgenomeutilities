@@ -1,4 +1,1 @@
-biopython
-numpy
-progress
-pysam
+.
