@@ -43,6 +43,7 @@ setup(
         "progress",
         "pysam",
     ],
+    include_package_data=True,
     long_description=long_description,
     classifiers=[
         "Development Status :: 3 - Alpha",
