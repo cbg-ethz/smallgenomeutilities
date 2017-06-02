@@ -70,6 +70,10 @@ pair_sequences
 --------------
 Compare sequences from a multiple sequence alignment from transmitter and recipient samples in order to determine the optimal matching of transmitters to recipients.
 
+predict_num_reads
+-----------------
+Predict number of reads after quality preprocessing. 
+
 remove_gaps_msa
 ---------------
 Given a multiple sequence alignment, remove loci with a gap fraction above a certain threshold.
