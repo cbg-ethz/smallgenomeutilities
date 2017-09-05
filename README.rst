@@ -13,7 +13,7 @@ Dependencies
 - numpy
 - progress
 - pysam
-
+- sklearn
 
 ************
 Installation
@@ -29,6 +29,10 @@ The recommended way to install the smallgenomeutilities is using pip:
 ************************
 Description of utilities
 ************************
+
+compute_mds
+___________
+Compute multidimensional scaling for visualizing distances among reconstructed haplotypes.
 
 convert_qr
 ----------

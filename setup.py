@@ -25,6 +25,7 @@ setup(
     url="https://github.com/cbg-ethz/smallgenomeutilities",
     packages=["smallgenomeutilities"],
     scripts=[
+        "scripts/compute_mds",
         "scripts/convert_qr",
         "scripts/convert_reference",
         "scripts/coverage",
@@ -44,6 +45,9 @@ setup(
         "numpy",
         "progress",
         "pysam",
+        "sklearn",
+        "scipy",
+        "matplotlib",
     ],
     include_package_data=True,
     long_description=readme(),
