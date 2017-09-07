@@ -115,21 +115,18 @@ def main():
     args = parse_args()
 
     # Load sequences with pysam
-    bamfile = args.haplotypes + ".sorted.bam"
-    haplotypes_recons = pysam.AlignmentFile(bamfile, mode='rb')
-    num_haplotypes_recons = haplotypes_recons.count()
-    reference_name = haplotypes_recons.get_reference_name(0)
+    bamfile = args.haplotypes + ".bam"
 
     region_length = args.end - args.start
     hap_alignment_sequences = []
     haplotype_IDs = []
+    haplotype_ID_last = []
     insertions = []
     insertion_len = []
 
     # Parse reconstructed sequences using same indexing as the reference
     with pysam.AlignmentFile(bamfile, mode='rb') as alnfile:
-        for hap_recons in alnfile.fetch(reference=reference_name, start=args.start, end=args.end):
-            haplotype_IDs.append(hap_recons.query_name)
+        for hap_recons in alnfile.fetch(until_eof=True):
             alignment_sequence = get_alignment_sequence(
                 hap_recons, args.start, args.end)
             aux = alignment_sequence[0]
@@ -142,11 +139,23 @@ def main():
                         [aux, ''.join(np.repeat('*', args.end - hap_recons.reference_end))])
             assert len(aux) == region_length, "Reconstructed sequence {} is shorter than expected".format(
                 hap_recons.query_name)
-            hap_alignment_sequences.append(aux)
-            insertions.append(alignment_sequence[1])
-            insertion_len.append(alignment_sequence[2])
+            # Cliques with "gaps" are reported as a single sequence in the fasta and as separate sequence in the bam. Here, it is assumed that second sequence in the bam file can be appended after first.
+            if hap_recons.query_name == haplotype_ID_last:
+                assert locus_last <= hap_recons.reference_start, "It is assumed that second sequence in the bam file can be appended after first"
+                aux2 = hap_alignment_sequences[-1][:(hap_recons.reference_start - args.start)] + aux[(
+                    hap_recons.reference_start - args.start):]
+                hap_alignment_sequences[-1] = aux2
+                insertions[-1] = insertions[-1] + alignment_sequence[1]
+                insertion_len[-1] += alignment_sequence[2]
+            else:
+                hap_alignment_sequences.append(aux)
+                haplotype_IDs.append(hap_recons.query_name)
+                insertions.append(alignment_sequence[1])
+                insertion_len.append(alignment_sequence[2])
+            haplotype_ID_last = hap_recons.query_name
+            locus_last = hap_recons.reference_end
 
-    assert num_haplotypes_recons == len(hap_alignment_sequences)
+    num_haplotypes_recons = len(hap_alignment_sequences)
 
     # Compute pairwise distances
     dist = np.zeros(shape=(num_haplotypes_recons,
@@ -175,11 +184,13 @@ def main():
     fastafile = args.haplotypes + ".fasta"
     haplotypes_recons = pysam.FastaFile(fastafile)
     haplotype_freqs = np.zeros(haplotypes_recons.nreferences)
-
     for h in haplotypes_recons.references:
         aux = h.split('|')
         idx = [i for i, ID in enumerate(haplotype_IDs) if ID == aux[0]]
-        haplotype_freqs[idx] = float(aux[1].split(':')[-1])
+        if aux[1] != 'paired':
+            haplotype_freqs[idx] = float(aux[1].split(':')[-1])
+        else:
+            haplotype_freqs[idx] = float(aux[2].split(':')[-1])
 
     # Compute MDS and plot
     seed = np.random.RandomState(seed=3)
@@ -235,14 +246,16 @@ def main():
                 # Compute sequence similarity between reconstructed haplotype and true haplotype
                 sim = (alignment_len[idxs, i] - dist[idxs, i]) / region_length
                 idx = idxs[sim == np.max(sim)]
-                assert idx.size == 1, "More than one reconstructed haplotype map to the same true haplotype"
-                assert haplotype_freqs[idx] > args.freq_thrd, "Relative abundance of reconstructed haplotype map to true haplotype is smaller than threshold"
+                assert idx.size == 1, "More than one reconstructed haplotype mapped to the same true haplotype"
                 idx = idx[0]
-                if sim[np.argmax(sim)] >= args.sim_thrd:
+                if sim[np.argmax(sim)] >= args.sim_thrd and haplotype_freqs[idx] > args.freq_thrd:
                     TP += 1
                     TP_w += haplotype_freqs[idx]
-                mapping[haplotypes_true.references[i]] = (
-                    haplotype_IDs[idx], dist[idx, i], alignment_len[idx, i], haplotype_freqs[idx])
+                    mapping[haplotypes_true.references[i]] = (
+                        haplotype_IDs[idx], dist[idx, i], alignment_len[idx, i], haplotype_freqs[idx])
+                else:
+                    print("Reconstructed haplotypes mapped to {} - Relative abundance(s):{} and corresponding similarity: {}".format(
+                        haplotypes_true.references[i], haplotype_freqs[idxs], sim))
 
         # Write mapping to output
         with open(args.outname, 'w') as outfile:
