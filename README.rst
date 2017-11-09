@@ -2,7 +2,7 @@
 smallgenomeutilities
 ####################
 
-The smallgenomeutilities are a collection of scripts that is useful for dealing and manipulating NGS data of small viral genomes. They are written in Python 3 with a minimal number of dependencies.
+The smallgenomeutilities are a collection of scripts that is useful for dealing and manipulating NGS data of small viral genomes. They are written in Python 3 with a small number of dependencies.
 
 
 ************
@@ -14,6 +14,7 @@ Dependencies
 - progress
 - pysam
 - sklearn
+- matplotlib
 
 ************
 Installation
