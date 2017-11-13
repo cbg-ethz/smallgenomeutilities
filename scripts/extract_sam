@@ -10,6 +10,14 @@ import pysam
 
 from smallgenomeutilities.__mapper_impl__ import convert_from_intervals_to_list, find_interval_on_dest
 
+__author__ = "David Seifert"
+__copyright__ = "Copyright 2016-2017"
+__credits__ = "David Seifert"
+__license__ = "GPL2+"
+__maintainer__ = "Susana Posada Cespedes"
+__email__ = "hiv-cbg@bsse.ethz.ch"
+__status__ = "Development"
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "-t", dest="TO", help="Name of target contig, e.g. HXB2:2253-2256", metavar="dest", required=True)

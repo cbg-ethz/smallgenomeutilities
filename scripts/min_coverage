@@ -7,6 +7,14 @@ from operator import itemgetter
 import argparse
 import pysam
 
+__author__ = "David Seifert"
+__copyright__ = "Copyright 2017"
+__credits__ = "David Seifert"
+__license__ = "GPL2+"
+__maintainer__ = "Susana Posada Cespedes"
+__email__ = "hiv-cbg@bsse.ethz.ch"
+__status__ = "Development"
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "-t", dest="TO", help="Name of target contig, e.g. HXB2:2253-2256", metavar="dest", required=True)
