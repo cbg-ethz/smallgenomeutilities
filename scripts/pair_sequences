@@ -11,6 +11,14 @@ from Bio.Phylo.TreeConstruction import DistanceTreeConstructor
 from Bio.Phylo.TreeConstruction import _DistanceMatrix
 from matplotlib import figure
 
+__author__ = "David Seifert"
+__copyright__ = "Copyright 2017"
+__credits__ = "David Seifert"
+__license__ = "GPL2+"
+__maintainer__ = "Susana Posada Cespedes"
+__email__ = "hiv-cbg@bsse.ethz.ch"
+__status__ = "Development"
+
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", dest="TSV", help="tsv file of patient/sample/cluster/type mapping", metavar="tsv",
                     required=True)

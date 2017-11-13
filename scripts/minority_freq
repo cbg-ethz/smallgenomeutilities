@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
 
-import pysam
-import argparse
-import os
-import numpy as np
-from multiprocessing import Pool
-
 '''
 input:  alignment file(s) as Bam file(s) and, either reference sequence in
         FASTA format or, if only one genetic region is of interest, the name of
@@ -16,6 +10,20 @@ output: tab-separated file. Minority alleles on the rows and samples as columns.
         Majority base/aminoacid per loci is identify by summing relative
         abundances.
 '''
+
+import pysam
+import argparse
+import os
+import numpy as np
+from multiprocessing import Pool
+
+__author__ = "Susana Posada Cespedes"
+__copyright__ = "Copyright 2017"
+__credits__ = "Susana Posada Cespedes"
+__license__ = "GPL2+"
+__maintainer__ = "Susana Posada Cespedes"
+__email__ = "hiv-cbg@bsse.ethz.ch"
+__status__ = "Development"
 
 
 class AlignedRead():

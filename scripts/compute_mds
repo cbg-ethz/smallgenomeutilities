@@ -6,6 +6,14 @@ import numpy as np
 from sklearn import manifold
 import matplotlib.pyplot as plt
 
+__author__ = "Susana Posada Cespedes"
+__copyright__ = "Copyright 2017"
+__credits__ = "Susana Posada Cespedes"
+__license__ = "GPL2+"
+__maintainer__ = "Susana Posada Cespedes"
+__email__ = "hiv-cbg@bsse.ethz.ch"
+__status__ = "Development"
+
 
 def hamming_dist(s1, s2):
     """Return the Hamming distance between sequences"""
