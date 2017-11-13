@@ -45,7 +45,7 @@ setup(
         "numpy",
         "progress",
         "pysam",
-        "sklearn",
+        "scikit-learn",
         "scipy",
         "matplotlib",
     ],
