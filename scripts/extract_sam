@@ -102,7 +102,7 @@ def seq_builder(have_already_loci, subsequence, read, contig_details):
     seq = subsequence
     found_loci = have_already_loci
 
-    if (contig_details.locus_start in range(read.reference_start, read.reference_end)) or (
+    if (contig_details.locus_start in range(read.reference_start, read.reference_end)) and (
             contig_details.locus_end in range(read.reference_start, read.reference_end)):
 
         pos_on_read = 0
