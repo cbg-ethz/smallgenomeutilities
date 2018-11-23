@@ -32,7 +32,7 @@ Description of utilities
 ************************
 
 compute_mds
-___________
+-----------
 Compute multidimensional scaling for visualizing distances among reconstructed haplotypes.
 
 convert_qr
@@ -50,6 +50,10 @@ Calculate average coverage for a target region on a different contig.
 coverage_stats
 --------------
 Calculate average coverage for a target region of an alignment.
+
+extract_consensus
+-----------------
+Build consensus sequences including either the majority base or the ambiguous bases from an alignment (BAM) file.
 
 extract_coverage_intervals
 --------------------------
