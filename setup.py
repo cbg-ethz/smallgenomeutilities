@@ -30,6 +30,7 @@ setup(
         "scripts/convert_reference",
         "scripts/coverage",
         "scripts/coverage_stats",
+        "scripts/extract_consensus",
         "scripts/extract_coverage_intervals",
         "scripts/extract_sam",
         "scripts/extract_seq",
