@@ -15,7 +15,11 @@ import pysam
 import argparse
 import os
 import numpy as np
+from Bio import SeqIO
+from Bio.SeqRecord import SeqRecord
+from Bio.Seq import Seq
 from multiprocessing import Pool
+from smallgenomeutilities.__checkPath__ import CheckPath
 
 __author__ = "Susana Posada Cespedes"
 __copyright__ = "Copyright 2017"
@@ -65,22 +69,6 @@ class AlignedRead():
         return np.arange(self.read.reference_start, self.read.reference_end)
 
 
-class CheckPath(argparse.Action):
-
-    def __call__(self, parser, namespace, values, option_string=None):
-
-        path = values
-
-        if not os.path.exists(path):
-            os.makedirs(path)
-
-        if os.access(path, os.W_OK):
-            setattr(namespace, self.dest, path)
-        else:
-            raise argparse.ArgumentTypeError(
-                "CheckPath:{0} is not a writable directory".format(path))
-
-
 def parse_args():
     """ Set up the parsing of command-line arguments """
     parser = argparse.ArgumentParser(description="Script to extract minority alleles per samples",
@@ -103,7 +91,7 @@ def parse_args():
     parser.add_argument("-f", "--freqs", required=False, action='store_true', dest='freqs',
                         help="Indicates whether or not all frequencies should be stored")
     parser.add_argument("-d", required=False, action='store_true', dest='coverage',
-                        help="Indicates wheter coverage per locus should be output")
+                        help="Indicates whether coverage per locus should be written to output file")
     parser.add_argument("-o", required=False, default=os.getcwd(), action=CheckPath, metavar='PATH', dest='outdir',
                         help="Output directory")
     parser.add_argument("FILES", nargs='+', metavar='BAM', help="BAM file(s)")
@@ -214,6 +202,7 @@ def main():
         assert reference.nreferences == 1, 'Only one reference sequence expected'
         region_len = reference.lengths[0]
         reference_name = reference.references[0]
+        header = reference_name
         cohort_consensus = reference.fetch(reference=reference_name).lower()
 
     else:
@@ -221,6 +210,7 @@ def main():
         end = args.end - 1
         region_len = end - start + 1
         reference_name = args.reference
+        header = "{}:{}-{}".format(reference_name, start, end)
         cohort_consensus = 'n' * region_len
 
     args_list = [(bamfile, reference_name, start, end, region_len,
@@ -337,13 +327,10 @@ def main():
                     minor_variants_freqs[i_idx, j_idx]))
             outfile.write('\n')
 
-    # Write to output file cohort-consensus. Consensus is with respect to HXB2
+    # Write to output file cohort-consensus. Consensus is built with respect to the reference
+    cohort_consensus = SeqRecord(Seq(cohort_consensus), id=header, description="")
     with open(os.path.join(args.outdir, 'cohort_consensus.fasta'), 'w') as outfile:
-        if start is None and end is None:
-            outfile.write(">{}\n".format(reference_name))
-        else:
-            outfile.write(">{}:{}-{}\n".format(reference_name, start, end))
-        outfile.write(cohort_consensus)
+        SeqIO.write(cohort_consensus, outfile, "fasta")
 
     # Write to output file coverage per locus
     if args.coverage:
