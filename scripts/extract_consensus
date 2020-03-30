@@ -14,7 +14,7 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
 from smallgenomeutilities.__checkPath__ import CheckPath
-from minority_freq import AlignedRead, ascii2idx, get_counts
+from smallgenomeutilities.__pileup__ import AlignedRead, ascii2idx, get_counts
 
 __author__ = "Susana Posada Cespedes"
 __copyright__ = "Copyright 2017"
