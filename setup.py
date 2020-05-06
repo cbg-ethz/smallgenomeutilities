@@ -15,7 +15,7 @@ def readme():
 
 setup(
     name="smallgenomeutilities",
-    version="0.3.0",
+    version="0.3.1",
     author="David Seifert, Susana Posada Cespedes",
     author_email="david.seifert@bsse.ethz.ch, susana.posada@bsse.ethz.ch",
     description=(
