@@ -212,7 +212,7 @@ def main():
     if args.patientIDs is None:
         patientIDs = "\t".join(str(x) for x in np.arange(num_samples))
     else:
-        patientIDs = "\t".join(patientIDs)
+        patientIDs = "\t".join(sorted(patientIDs))
 
     with open(os.path.join(args.outdir, 'minority_variants.tsv'), 'w') as outfile:
         outfile.write("# pos\tvariant\t" + patientIDs + "\n")
