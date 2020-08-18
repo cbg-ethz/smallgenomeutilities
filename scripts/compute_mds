@@ -11,7 +11,7 @@ __copyright__ = "Copyright 2017"
 __credits__ = "Susana Posada Cespedes"
 __license__ = "GPL2+"
 __maintainer__ = "Susana Posada Cespedes"
-__email__ = "hiv-cbg@bsse.ethz.ch"
+__email__ = "v-pipe@bsse.ethz.ch"
 __status__ = "Development"
 
 
