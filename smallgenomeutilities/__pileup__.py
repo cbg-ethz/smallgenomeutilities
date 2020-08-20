@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import pysam
 import numpy as np
 
@@ -64,45 +65,52 @@ def ascii2idx(sequence):
     return sequence
 
 
-def get_counts(args):
+def get_aln_counts(args):
 
-    bamfile, reference_name, start, end, region_len, alphabet_len = args
+    alnfile, reference_name, start, end, region_len, alphabet_len = args
 
     nt_counts = np.zeros(shape=(region_len * alphabet_len))
 
-    with pysam.AlignmentFile(bamfile, 'rb') as alnfile:
+    for read in alnfile.fetch(reference=reference_name, start=start, end=end):
+        # Fetch returns all reads which cover an specific region. However,
+        # all positions - including positions outside the region of interest -
+        # are returned
+        aligned_read = AlignedRead(read)
+        alignment_positions = aligned_read.get_alignment_positions()
+        alignment_sequence = np.array(
+            aligned_read.get_alignment_sequence(), dtype='c').view(np.uint8)
 
-        for read in alnfile.fetch(reference=reference_name, start=start, end=end):
-            # Fetch returns all reads which cover an specific region. However,
-            # all positions - including positions outside the region of interest -
-            # are returned
-            aligned_read = AlignedRead(read)
-            alignment_positions = aligned_read.get_alignment_positions()
-            alignment_sequence = np.array(
-                aligned_read.get_alignment_sequence(), dtype='c').view(np.uint8)
+        if start is not None and end is not None:
+            # Extract region of interest
+            idxs = (alignment_positions >= start) & (
+                alignment_positions <= end)
+            alignment_positions = alignment_positions[idxs]
+            alignment_sequence = alignment_sequence[idxs]
 
-            if start is not None and end is not None:
-                # Extract region of interest
-                idxs = (alignment_positions >= start) & (
-                    alignment_positions <= end)
-                alignment_positions = alignment_positions[idxs]
-                alignment_sequence = alignment_sequence[idxs]
+        alignment_sequence = ascii2idx(alignment_sequence)
 
-            alignment_sequence = ascii2idx(alignment_sequence)
+        # Filter bases that are not in the alphabet
+        if (alignment_sequence >= alphabet_len).any():
+            idxs = np.where(alignment_sequence >= alphabet_len)
+            alignment_positions = np.delete(alignment_positions, idxs)
+            alignment_sequence = np.delete(alignment_sequence, idxs)
 
-            # Filter bases that are not in the alphabet
-            if (alignment_sequence >= alphabet_len).any():
-                idxs = np.where(alignment_sequence >= alphabet_len)
-                alignment_positions = np.delete(alignment_positions, idxs)
-                alignment_sequence = np.delete(alignment_sequence, idxs)
+        if start is None and end is None:
+            idxs_array = alignment_positions * alphabet_len + alignment_sequence
+        else:
+            # Shift the indexing
+            idxs_array = (alignment_positions * alphabet_len) + \
+                alignment_sequence - (start * alphabet_len)
 
-            if start is None and end is None:
-                idxs_array = alignment_positions * alphabet_len + alignment_sequence
-            else:
-                # Shift the indexing
-                idxs_array = (alignment_positions * alphabet_len) + \
-                    alignment_sequence - (start * alphabet_len)
-
-            nt_counts[idxs_array] += 1
+        nt_counts[idxs_array] += 1
 
     return nt_counts
+
+
+def get_counts(args):
+
+    bamfile = args[0]
+
+    with pysam.AlignmentFile(bamfile, 'rc' if os.path.splitext(bamfile)[1] == '.cram' else 'rb') as alnfile:
+
+        return get_aln_counts([alnfile] + args[1:])

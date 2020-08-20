@@ -35,7 +35,7 @@ UnalignedReads = 0
 
 coverages_nonzero = []
 
-with pysam.AlignmentFile(INPUT, "rb") as samfile:
+with pysam.AlignmentFile(INPUT, 'rc' if os.path.splitext(INPUT)[1] == '.cram' else 'rb') as samfile:
     for pileupcolumn in samfile.pileup(TO_CONTIG, START_COORD, END_COORD):
         if START_COORD <= pileupcolumn.pos < END_COORD:
             coverages_nonzero.append(pileupcolumn.n)

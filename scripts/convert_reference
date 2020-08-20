@@ -47,7 +47,7 @@ input_filestem, input_extension = os.path.splitext(INPUT)
 OUTPUT = (input_filestem + "_out" +
           input_extension) if args.OUTPUT == "" else args.OUTPUT
 output_filestem, output_extension = os.path.splitext(OUTPUT)
-BINARY = True if output_extension == ".bam" else False
+BINARY = True if output_extension in (".bam", ".cram") else False
 
 if (INPUT == OUTPUT):
     print("Input and output filenames cannot be identical!")
@@ -66,7 +66,7 @@ for record in Bio.SeqIO.parse(MSA_FILE, "fasta"):
     genomes[record.id] = record
 
 # load SAM/BAM
-input_file = pysam.AlignmentFile(INPUT, "rb")
+input_file = pysam.AlignmentFile(INPUT, 'rc' if os.path.splitext(INPUT)[1] == '.cram' else 'rb')
 
 sam_pos_to_fasta_pos = {}
 for ref in input_file.references:
@@ -793,6 +793,7 @@ output_file.close()
 # if BAM, also sort + index file
 if BINARY:
     print("Sorting {}".format(OUTPUT))
+    # either .cram or .bam OUTPUT
     pysam.sort("-o", OUTPUT, output_file_name)
 
     print("Indexing {}".format(OUTPUT))

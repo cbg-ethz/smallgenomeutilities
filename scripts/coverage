@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import sys
 from collections import namedtuple
 
@@ -38,7 +39,7 @@ OUTPUT = args.OUTPUT
 SELECT_CONTIG = args.SELECT_CONTIG
 
 # 1. load SAM/BAM
-samfile = pysam.AlignmentFile(INPUT, "rb")
+samfile = pysam.AlignmentFile(INPUT, 'rc' if os.path.splitext(INPPUT)[1] == '.cram' else 'rb')
 
 # 2. Create source -> dist map
 contig_loci_map = {}

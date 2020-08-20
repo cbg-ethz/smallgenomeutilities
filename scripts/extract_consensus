@@ -157,7 +157,7 @@ def main():
         sampleID = args.sampleID
 
     # 1. Load BAM file and get counts per loci
-    with pysam.AlignmentFile(args.bamfile, 'rb') as alnfile:
+    with pysam.AlignmentFile(args.bamfile, 'rc' if os.path.splitext(args.bamfile)[1] == '.cram' else 'rb') as alnfile:
         if reference_name is None:
             reference_name = alnfile.references[0]
         counts = alnfile.count_coverage(

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import pysam
 import argparse
 import numpy as np
@@ -133,7 +134,7 @@ def main():
     insertion_len = []
 
     # Parse reconstructed sequences using same indexing as the reference
-    with pysam.AlignmentFile(bamfile, mode='rb') as alnfile:
+    with pysam.AlignmentFile(bamfile, mode=('rc' if os.path.splitext(bamfile)[1] == '.cram' else 'rb')) as alnfile:
         for hap_recons in alnfile.fetch(until_eof=True):
             alignment_sequence = get_alignment_sequence(
                 hap_recons, args.start, args.end)

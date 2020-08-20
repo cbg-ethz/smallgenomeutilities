@@ -69,7 +69,7 @@ if (INPUT == OUTPUT):
     sys.exit(0)
 
 # load SAM/BAM
-samfile = pysam.AlignmentFile(INPUT, "rb")
+samfile = pysam.AlignmentFile(INPUT, 'rc' if os.path.splitext(INPUT)[1] == '.cram' else 'rb')
 
 contig_loci_map = {}
 contig_tuple = namedtuple("contig_map", "map locus_start locus_end")
