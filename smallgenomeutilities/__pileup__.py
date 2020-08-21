@@ -114,3 +114,39 @@ def get_counts(args):
     with pysam.AlignmentFile(bamfile, 'rc' if os.path.splitext(bamfile)[1] == '.cram' else 'rb') as alnfile:
 
         return get_aln_counts([alnfile] + args[1:])
+
+
+def get_cnt_matrix (alnfile, reference_name, alpha='ACGT-'):
+    """
+    returns:
+     - 2D array with counts per positions in rows and per alphabet in columns
+       for all reads in reference_name
+        >  match[i,j] = (sequence[i] ?= alphabet[j])
+        >  counts[position+i,j] += 1 if match[i,j]
+     - readcounts
+     - total template_length    ( = insert_size * reads )
+     - total read bases         ( = read_len    * reads )
+    """
+    #tid=alnfile.get_tid(reference_name)
+    region_len=alnfile.get_reference_length(reference_name)
+
+    nt_alpha=np.array(alpha, dtype='c').view(np.uint8)
+    alphabet_len=nt_alpha.shape[0] #=len(alpha)
+
+    nt_counts = np.zeros(shape=(region_len, alphabet_len),dtype=np.uint32)
+    reads=0
+    insert_tot=0
+    rlen_tot=0
+    for read in alnfile.fetch(reference=reference_name):
+        reads+=1
+        insert_tot+=abs(read.template_length)
+        rlen_tot+=read.reference_end-read.reference_start
+        aligned_read = AlignedRead(read)
+        #alignment_positions = aligned_read.get_alignment_positions()
+        alignment_sequence = np.array(
+            aligned_read.get_alignment_sequence(), dtype='c').view(np.uint8)
+
+        #nt_counts[alignment_positions,:] += np.equal.outer(alignment_sequence, nt_alpha)
+        nt_counts[read.reference_start:read.reference_end,:] += np.equal.outer(alignment_sequence, nt_alpha)
+
+    return nt_counts, reads, insert_tot, rlen_tot
