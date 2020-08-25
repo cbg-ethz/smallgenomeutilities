@@ -35,6 +35,8 @@ def parse_args():
     parser.add_argument('-o', '--output', metavar='TSV', required=True,
                         default='coverage.tsv.gz',
                         type=str, dest='coverage', help='unified coverage table output file')
+    parser.add_argument('-s', '--stats', metavar='TSV', required=False,
+                        type=str, dest='stats', help="file to write per-position cohort-wide stats to")
     parser.add_argument('-t', '--threads', metavar='NCPUS', required=False,
                         default=4,
                         type=int, dest='threads', help="number of threads")
@@ -59,6 +61,12 @@ def main():
 
     # save the TSV files
     coverage.to_csv(args.coverage, sep="\t", compression={'method':'infer'})
+
+    # save cohort-wide per position stats
+    if args.stats:
+        coverage.apply(pd.DataFrame.describe, axis=1).to_csv(
+            args.stats, sep="\t", compression={'method':'infer'})
+
 
 if __name__ == '__main__':
     main()
