@@ -31,31 +31,46 @@ def parse_args():
             description="Script to construct consensus sequences",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     requiredNamed = parser.add_argument_group('required named arguments')
-    requiredNamed.add_argument("-i", required=True, metavar='BAM',
-                               dest='bamfile', help="Input BAM file")
-    parser.add_argument("-f", required=False, metavar='FASTA', dest='reference',
-                        type=str,
-                        help="Fasta file containing the reference sequence")
-    parser.add_argument("-r", required=False, default=None, metavar='BED',
-                        dest='region', type=str,
-                        help="Region of interested in BED format, e.g. HXB2:2253-3869. Loci are interpreted using 0-based indexing, and a half-open interval is used, i.e, [start:end)")
-    parser.add_argument("-c", required=False, default=50, metavar='INT',
-                        dest='min_coverage', type=int,
-                        help="Minimum read depth for reporting variants per locus")
-    parser.add_argument("-q", required=False, default=15, metavar='INT',
-                        dest='qual_thrd', type=int,
-                        help="Minimum phred quality score a base has to reach to be counted")
-    parser.add_argument("-a", required=False, default=0.05, metavar='FLOAT',
-                        dest='min_freq', type=float, help="Minimum frequency for an ambiguous nucleotide")
-    parser.add_argument("-n", required=False, default=None, metavar='INT',
-                        dest='n_threshold', type=int,
-                        help="Read count below which ambiguous base 'n' is reported")
-    parser.add_argument("-N", required=False, default="CONSENSUS", type=str,
-                        metavar='STR', dest="sampleID",
-                        help="Patient/sample identifier")
-    parser.add_argument("-o", required=False, default=os.getcwd(),
-                        action=CheckPath, metavar='PATH', dest='outdir',
-                        help="Output directory")
+    requiredNamed.add_argument(
+        "-i", required=True, metavar='BAM', dest='bamfile',
+        help="Input BAM file"
+    )
+    parser.add_argument(
+        "-f", required=False, metavar='FASTA', dest='reference', type=str,
+        help="Fasta file containing the reference sequence"
+    )
+    parser.add_argument(
+        "-r", required=False, default=None, metavar='BED', dest='region',
+        type=str,
+        help="Region of interested in BED format, e.g. HXB2:2253-3869. Loci "
+             "are interpreted using 0-based indexing, and a half-open "
+             "interval is used, i.e, [start:end)"
+    )
+    parser.add_argument(
+        "-c", required=False, default=50, metavar='INT', dest='min_coverage',
+        type=int, help="Minimum read depth for reporting variants per locus"
+    )
+    parser.add_argument(
+        "-q", required=False, default=15, metavar='INT', dest='qual_thrd',
+        type=int,
+        help="Minimum phred quality score a base has to reach to be counted"
+    )
+    parser.add_argument(
+        "-a", required=False, default=0.05, metavar='FLOAT', dest='min_freq',
+        type=float, help="Minimum frequency for an ambiguous nucleotide"
+    )
+    parser.add_argument(
+        "-n", required=False, default=None, metavar='INT', dest='n_threshold',
+        type=int, help="Read count below which ambiguous base 'n' is reported"
+    )
+    parser.add_argument(
+        "-N", required=False, default="CONSENSUS", type=str, metavar='STR',
+        dest="sampleID", help="Patient/sample identifier"
+    )
+    parser.add_argument(
+        "-o", required=False, default=os.getcwd(), action=CheckPath,
+        metavar='PATH', dest='outdir', help="Output directory"
+    )
 
     return parser.parse_args()
 
@@ -77,13 +92,16 @@ def ambiguous_bases(counts, min_freq, majority=None):
     IUPAC_CODE = np.array(('n', 'T', 'G', 'K', 'C', 'Y', 'S', 'B', 'A', 'W',
                            'R', 'D', 'M', 'H', 'V', 'N'))
     coverage = np.sum(counts, 0)
-    min_count = np.floor(min_freq * coverage)
-    min_count[min_count == 0] = 1
+    # To report ambiguous bases, every base with a relative frequency greater
+    # or equal to min_freq is accounted for. But at least two reads should
+    # support that base
+    min_count = np.ceil(min_freq * coverage)
+    min_count[min_count <= 1] = 2
     aux = counts >= min_count
     aux = aux.astype(int)
     encoding = np.array((8, 4, 2, 1))
-    for i in range(encoding.size):
-        aux[i, aux[i, :] == 1] = encoding[i]
+    for idx, val in enumerate(encoding):
+        aux[idx, aux[idx, :] == 1] = val
     cons_ambig = IUPAC_CODE[np.sum(aux[:4, ], 0)]
 
     # Take into account deletions, when information is available
@@ -108,7 +126,8 @@ def mask_low_quality(consensus, read_count, min_coverage, n_threshold,
             consensus[mask] = 'n'
         else:
             reference = pysam.FastaFile(reference)
-            assert reference.references[0] == reference_name, "the name of the genomic region and the reference differ"
+            assert reference.references[0] == reference_name, (
+                "the name of the genomic region and the reference differ")
             reference = reference.fetch(
                 reference=reference_name, start=start, end=end).lower()
             aux = [reference[idx] for idx in range(len(reference)) if mask[idx]]
