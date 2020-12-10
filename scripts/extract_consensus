@@ -185,7 +185,7 @@ def main():
 
     # 4. Mask positions with low coverage
     read_count = np.sum(counts, 0)
-    read_count_dels = np.sum(counts, 0)
+    read_count_dels = np.sum(counts_dels, 0)
 
     cons_majority = mask_low_quality(
         cons_majority, read_count, args.min_coverage, args.n_threshold,
