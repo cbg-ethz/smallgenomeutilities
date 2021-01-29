@@ -1,0 +1,239 @@
+import pysam
+import pysamstats
+import numpy as np
+import pandas as pd
+import os
+from Bio import SeqIO
+import argparse
+import pandas as pd
+
+
+
+def parse_args():
+    """ Set up the parsing of command-line arguments """
+    parser = argparse.ArgumentParser(
+            description="Script to construct consensus sequences",
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    requiredNamed = parser.add_argument_group('required named arguments')
+    requiredNamed.add_argument(
+        "-i", required=True, metavar='BAM', dest='bamfile',
+        help="Input BAM file"
+    )
+    parser.add_argument(
+        "-c", required=True, metavar='FASTA', dest='ref_majority_dels', type=str,
+        help="Fasta file containing the ref_majority_dels consensus sequence"
+    )
+    parser.add_argument(
+        "-f", required=True, metavar='FASTA', dest='reference', type=str,
+        help="Fasta file containing the reference sequence"
+    )
+    parser.add_argument(
+        "-o", required=False, default=os.getcwd(),
+        metavar='PATH', dest='outdir', help="Output directory"
+    )
+    return parser.parse_args()
+
+def check_homopolyeric(variation_info, position, gap_length):
+    '''
+    return homopolyeric == True if either around the start_position or the end_position
+    between the two neighbors 3 are of the same base, eg. AATAG
+    '''
+    list =[]
+    idx_pos = np.where(variation_info.pos ==position-1)[0]
+    list.append(variation_info[idx_pos-2].ref[0])
+    list.append(variation_info[idx_pos-1].ref[0])
+    list.append(variation_info[idx_pos].ref[0])
+    list.append(variation_info[idx_pos+1].ref[0])
+    list.append(variation_info[idx_pos+2].ref[0])
+    uni_list = np.unique(list, return_counts=True)
+    if np.max(uni_list[1])>2:
+        return 1
+    else:
+        #check end region of gap
+        list =[]
+        idx_pos = np.where(variation_info.pos ==position+gap_length-1)[0]
+        list.append(variation_info[idx_pos-2].ref[0])
+        list.append(variation_info[idx_pos-1].ref[0])
+        list.append(variation_info[idx_pos].ref[0])
+        list.append(variation_info[idx_pos+1].ref[0])
+        list.append(variation_info[idx_pos+2].ref[0])
+        uni_list = np.unique(list, return_counts=True)
+        if np.max(uni_list[1])>2:
+            return 1
+        else:
+            return 0
+
+def get_gene_at_position(position):
+    """
+    Return gene and gene-region-interval the position belongs to.
+    This is only valid for SARS-CoV2.
+    """
+    gene_list = [(266, 21555, 'ORF1ab'),
+                 (21563, 25384, 'S'),
+                 (25393, 26220, 'ORF3a'),
+                 (26245, 26472, 'E'),
+                 (26523, 27191, 'M'),
+                 (27202, 27387, 'ORF6'),
+                 (27394, 27759, 'ORF7a'),
+                 (27756, 27887, 'ORF7b'),
+                 (27894, 28259, 'ORF8'),
+                 (28274, 29533, 'N'),
+                 (29558, 29674, 'ORF10'),
+                 ]
+    for gene in gene_list:
+        if position in range(gene[0],gene[1]):
+            return gene
+
+    return (position-10, position+10, '-')
+
+def check_inserts_gene_region(gene_reg_load_variation, region_start, region_end, coverage):
+    """
+    check if there are some insertions in the gene-region-interval that occur in
+    more than 40% of the reads. If so, returns the position of those insertions.
+    """
+    i_start = np.where(gene_reg_load_variation.pos ==region_start)[0][0]
+    i_end = np.where(gene_reg_load_variation.pos ==region_end)[0][0]
+
+    inserts= gene_reg_load_variation.insertions[i_start:i_end]
+    #dels= gene_reg_load_variation.deletions[i_start:i_end]
+
+    critical_inserts = [gene_reg_load_variation.pos[i] for i,x in enumerate(inserts) if x > 0.4*coverage]
+    #critical_dels = [item for item in dels if item > 0.4*coverage]
+
+    return critical_inserts
+
+def ranges(nums):
+    """
+    auxiliary function for list_frameshift_dels().
+    Input is a list of numbers
+    return ranges that are covered by those numbers,
+    e.g. [1,2,3,10]--> [(1,3),(10,10)]
+    """
+    nums = sorted(set(nums))
+    gaps = [[s, e] for s, e in zip(nums, nums[1:]) if s+1 < e]
+    edges = iter(nums[:1] + sum(gaps, []) + nums[-1:])
+    return list(zip(edges, edges))
+
+def len_del(item_range):
+    """
+    auxiliary function for list_frameshift_dels().
+    computing the lenght of item_range,
+    """
+    if item_range[0]==item_range[1]:
+        return 1
+    else:
+        return item_range[1]- item_range[0]
+
+#TODO: function listing frameshift insertions
+def list_frameshift_dels(reference, consensus):
+    """
+    Goes through consensus and detects deletions that are not a multiple of 3.
+    """
+    for seq_record in SeqIO.parse("ref_majority_dels.fasta", "fasta"):
+        seq = seq_record.seq
+        del_pos = [i for i,x in enumerate(seq) if x =="-"]
+
+    pos_length_list = []
+    for item_range in ranges(del_pos):
+        # only frameshift deletions , i.e. deletion lenght not dividible by 3
+        if len_del(item_range)%3 !=0:
+            pos_length_list.append([item_range[0],len_del(item_range)])
+    return pos_length_list
+
+def check_dels_gene_region(frameshift_deletions, region_start, region_end, position):
+    """
+    Check for deletions that are also in the consensus in this gene region.
+    """
+    critical_pos= []
+    for pos1 in frameshift_deletions:
+        if pos1[0] in range(region_start, region_end):
+            if pos1[0]!=position:
+                critical_pos.append(pos1[0])
+
+    return critical_pos
+
+
+def analyse_position(bamfile, reference, position, gap_length, frameshift_deletions):
+    """
+    gather information for current frameshift position.
+    """
+    gene_region= get_gene_at_position(position)
+    region_start =gene_region[0]
+    region_end = gene_region[1]
+
+    critical_dels = check_dels_gene_region(frameshift_deletions, region_start, region_end, position)
+
+    variation_info = pysamstats.load_variation_strand(bamfile, fafile= reference,chrom='NC_045512.2',
+                                     start=position, end=position+gap_length)
+    idx_pos = np.where(variation_info.pos ==position)
+
+    reads_all = variation_info[idx_pos].reads_all[0]
+    reads_fwd = variation_info[idx_pos].reads_fwd[0]
+    reads_rev = variation_info[idx_pos].reads_rev[0]
+    deletions = variation_info[idx_pos].deletions[0]
+    freq_del = deletions/reads_all*100
+    deletions_fwd = variation_info[idx_pos].deletions_fwd[0]
+    freq_del_fwd = deletions_fwd/reads_fwd*100
+    deletions_rev = variation_info[idx_pos].deletions_rev[0]
+    freq_del_rev = deletions_rev/reads_rev*100
+
+    indels_gene_reg = pysamstats.load_variation_strand(bamfile, fafile=reference,
+                                                        chrom='NC_045512.2',
+                                                        start=region_start, end=region_end)
+    critical_inserts= check_inserts_gene_region(indels_gene_reg,
+                                                    region_start, region_end, reads_all)
+
+    homopolyeric = check_homopolyeric(variation_info, position, gap_length)
+
+    dict = {'start_position': position,
+            'length': gap_length,
+            'gene_region':gene_region[2],
+            'reads_all': reads_all,
+            'reads_fwd': reads_fwd,
+            'reads_rev': reads_rev,
+            'deletions': deletions,
+            'freq_del': freq_del,
+            'freq_del_fwd': freq_del_fwd ,
+            'freq_del_rev':freq_del_rev,
+            'deletions_fwd': deletions_fwd,
+            'deletions_rev': deletions_rev,
+            'matches_ref': variation_info[idx_pos].matches[0],
+            'pos_critical_inserts': critical_inserts,
+            'pos_critical_dels': critical_dels,
+            'homopolyeric': homopolyeric,
+            'ref_base': variation_info[idx_pos].ref[0]
+           }
+
+    return dict
+
+def main():
+
+    args = parse_args()
+    bamfile = args.bamfile
+    reference = args.reference
+    consensus = args.ref_majority_dels
+
+    #bamfile ='REF_aln_410130_171220eg29_H5.bam'
+    #reference ='../references/NC_045512.2.fasta'
+    #consensus = 'ref_majority_dels.fasta'
+    df = pd.DataFrame(columns=('start_position','length','gene_region','reads_all',
+                                'reads_fwd','reads_rev', 'deletions','freq_del',
+                                'freq_del_fwd' ,'freq_del_rev','deletions_fwd',
+                                'deletions_rev','matches_ref','pos_critical_inserts',
+                                'pos_critical_dels','homopolyeric','ref_base'))
+
+    frameshift_deletions = list_frameshift_dels(reference, consensus)
+    all_frame_del =[]
+
+    for pos in frameshift_deletions:
+        position = pos[0]
+        gap_length = pos[1]
+        pos_dict = analyse_position(bamfile, reference, position, gap_length,
+                                    frameshift_deletions)
+        df = df.append(pos_dict, ignore_index=True)
+
+    #with open(os.path.join(args.outdir, "qa.yaml"), 'w') as outfile:
+    df.to_csv(os.path.join(args.outdir, 'frameshift_deletions_check.csv'))
+
+if __name__ == '__main__':
+    main()
