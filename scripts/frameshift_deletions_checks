@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import pysam
 import pysamstats
 import numpy as np
@@ -28,8 +30,8 @@ def parse_args():
         help="Fasta file containing the reference sequence"
     )
     parser.add_argument(
-        "-o", required=False, default=os.getcwd(),
-        metavar='PATH', dest='outdir', help="Output directory"
+        "-o", required=False, default=os.path.join(os.getcwd(), 'frameshift_deletions_check.csv'),
+        metavar='CSV', dest='outfile', help="Output file"
     )
     return parser.parse_args()
 
@@ -68,6 +70,7 @@ def get_gene_at_position(position):
     Return gene and gene-region-interval the position belongs to.
     This is only valid for SARS-CoV2.
     """
+    # TODO load from GFF files like visualisation
     gene_list = [(266, 21555, 'ORF1ab'),
                  (21563, 25384, 'S'),
                  (25393, 26220, 'ORF3a'),
@@ -129,7 +132,7 @@ def list_frameshift_dels(reference, consensus):
     """
     Goes through consensus and detects deletions that are not a multiple of 3.
     """
-    for seq_record in SeqIO.parse("ref_majority_dels.fasta", "fasta"):
+    for seq_record in SeqIO.parse(consensus, "fasta"):
         seq = seq_record.seq
         del_pos = [i for i,x in enumerate(seq) if x =="-"]
 
@@ -163,7 +166,7 @@ def analyse_position(bamfile, reference, position, gap_length, frameshift_deleti
 
     critical_dels = check_dels_gene_region(frameshift_deletions, region_start, region_end, position)
 
-    variation_info = pysamstats.load_variation_strand(bamfile, fafile= reference,chrom='NC_045512.2',
+    variation_info = pysamstats.load_variation_strand(bamfile, fafile= reference,chrom='NC_045512.2', # TODO loop instead of hard-code
                                      start=position, end=position+gap_length)
     idx_pos = np.where(variation_info.pos ==position)
 
@@ -178,7 +181,7 @@ def analyse_position(bamfile, reference, position, gap_length, frameshift_deleti
     freq_del_rev = deletions_rev/reads_rev*100
 
     indels_gene_reg = pysamstats.load_variation_strand(bamfile, fafile=reference,
-                                                        chrom='NC_045512.2',
+                                                        chrom='NC_045512.2', # TODO loop instead of hard-code
                                                         start=region_start, end=region_end)
     critical_inserts= check_inserts_gene_region(indels_gene_reg,
                                                     region_start, region_end, reads_all)
@@ -200,7 +203,7 @@ def analyse_position(bamfile, reference, position, gap_length, frameshift_deleti
             'matches_ref': variation_info[idx_pos].matches[0],
             'pos_critical_inserts': critical_inserts,
             'pos_critical_dels': critical_dels,
-            'homopolyeric': homopolyeric,
+            'homopolymeric': homopolyeric,
             'ref_base': variation_info[idx_pos].ref[0]
            }
 
@@ -209,18 +212,15 @@ def analyse_position(bamfile, reference, position, gap_length, frameshift_deleti
 def main():
 
     args = parse_args()
-    bamfile = args.bamfile
-    reference = args.reference
-    consensus = args.ref_majority_dels
+    bamfile = args.bamfile	    # e.g.: 'REF_aln_410130_171220eg29_H5.bam'
+    reference = args.reference	# e.g.: '../references/NC_045512.2.fasta'
+    consensus = args.ref_majority_dels	# e.g.: 'ref_majority_dels.fasta'
 
-    #bamfile ='REF_aln_410130_171220eg29_H5.bam'
-    #reference ='../references/NC_045512.2.fasta'
-    #consensus = 'ref_majority_dels.fasta'
     df = pd.DataFrame(columns=('start_position','length','gene_region','reads_all',
                                 'reads_fwd','reads_rev', 'deletions','freq_del',
                                 'freq_del_fwd' ,'freq_del_rev','deletions_fwd',
                                 'deletions_rev','matches_ref','pos_critical_inserts',
-                                'pos_critical_dels','homopolyeric','ref_base'))
+                                'pos_critical_dels','homopolymeric','ref_base'))
 
     frameshift_deletions = list_frameshift_dels(reference, consensus)
     all_frame_del =[]
@@ -232,8 +232,7 @@ def main():
                                     frameshift_deletions)
         df = df.append(pos_dict, ignore_index=True)
 
-    #with open(os.path.join(args.outdir, "qa.yaml"), 'w') as outfile:
-    df.to_csv(os.path.join(args.outdir, 'frameshift_deletions_check.csv'))
+    df.to_csv(args.outfile)
 
 if __name__ == '__main__':
     main()
