@@ -30,7 +30,7 @@ def loader(tsvname):
 
 def parse_args():
     """ Set up the parsing of command-line arguments """
-    parser = argparse.ArgumentParser(fromfile_prefix_chars='@', # support pass BAM list in file instead of parameters 
+    parser = argparse.ArgumentParser(fromfile_prefix_chars='@', # support pass BAM list in file instead of parameters
                                      description="Script to gather multiple per sample coverage information into a single unified file",
                                      epilog="input and output TSVs support compression.\n@listfile can be used to pass a long list of TSV in a file instead of command line")
     parser.add_argument('-o', '--output', metavar='TSV', required=True,
