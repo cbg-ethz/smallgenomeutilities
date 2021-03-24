@@ -91,11 +91,13 @@ def get_gene_at_position(position):
 
 def check_inserts_gene_region(gene_reg_load_variation, region_start, region_end, coverage):
     """
-    check if there are some insertions in the gene-region-interval that occur in
+    check if there are some insertions in the gene-region-interval(*) that occur in
     more than 40% of the reads. If so, returns the position of those insertions.
+    ---
+    (*): or at least the part that got coverage
     """
-    i_start = np.where(gene_reg_load_variation.pos ==region_start)[0][0]
-    i_end = np.where(gene_reg_load_variation.pos ==region_end)[0][0]
+    i_start = np.where(gene_reg_load_variation.pos >=region_start)[0][0]
+    i_end = np.where(gene_reg_load_variation.pos <=region_end)[0][-1]
 
     inserts= gene_reg_load_variation.insertions[i_start:i_end]
     #dels= gene_reg_load_variation.deletions[i_start:i_end]
@@ -176,9 +178,9 @@ def analyse_position(bamfile, reference, position, gap_length, frameshift_deleti
     deletions = variation_info[idx_pos].deletions[0]
     freq_del = deletions/reads_all*100
     deletions_fwd = variation_info[idx_pos].deletions_fwd[0]
-    freq_del_fwd = deletions_fwd/reads_fwd*100
+    freq_del_fwd = deletions_fwd/reads_fwd*100 if reads_fwd else 0
     deletions_rev = variation_info[idx_pos].deletions_rev[0]
-    freq_del_rev = deletions_rev/reads_rev*100
+    freq_del_rev = deletions_rev/reads_rev*100 if reads_rev else 0
 
     indels_gene_reg = pysamstats.load_variation_strand(bamfile, fafile=reference,
                                                         chrom='NC_045512.2', # TODO loop instead of hard-code

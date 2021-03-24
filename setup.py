@@ -46,6 +46,7 @@ setup(
     install_requires=[
         "biopython",
         "pysam",
+        "pysamstats",
         "pandas",
         "numpy",
         "scipy",
