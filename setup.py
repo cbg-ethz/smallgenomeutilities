@@ -45,6 +45,7 @@ setup(
     ],
     install_requires=[
         "biopython",
+        "bcbio-gff",
         "pysam",
         "pysamstats",
         "pandas",
