@@ -138,15 +138,21 @@ def list_frameshift_dels(reference, consensus):
     """
     Goes through consensus and detects deletions that are not a multiple of 3.
     """
-    for seq_record in SeqIO.parse(consensus, "fasta"):
+
+    pos_length_list = []
+    for seq_record, ref_record in zip(SeqIO.parse(consensus, "fasta"), SeqIO.parse(reference, "fasta")):
+        # HACK assume seq_record have same order as ref_record
+        # TODO test to multi-segemented viruses before the next flu pandemic
+        print(f"{seq_record.id} mapped to {ref_record.id}")
+
         seq = seq_record.seq
         del_pos = [i for i,x in enumerate(seq) if x =="-"]
 
-    pos_length_list = []
-    for item_range in ranges(del_pos):
-        # only frameshift deletions , i.e. deletion lenght not dividible by 3
-        if len_del(item_range)%3 !=0:
-            pos_length_list.append([item_range[0],len_del(item_range)])
+        for item_range in ranges(del_pos):
+            # only frameshift deletions , i.e. deletion lenght not dividible by 3
+            if len_del(item_range)%3 !=0:
+                pos_length_list.append([item_range[0],len_del(item_range),ref_record.id])
+
     return pos_length_list
 
 def check_dels_gene_region(frameshift_deletions, region_start, region_end, position):
@@ -162,7 +168,7 @@ def check_dels_gene_region(frameshift_deletions, region_start, region_end, posit
     return critical_pos
 
 
-def analyse_position(bamfile, reference, position, gap_length, frameshift_deletions, based=1):
+def analyse_position(bamfile, reference, ref_id, position, gap_length, frameshift_deletions, based=1):
     """
     gather information for current frameshift position.
     """
@@ -172,7 +178,7 @@ def analyse_position(bamfile, reference, position, gap_length, frameshift_deleti
 
     critical_dels = check_dels_gene_region(frameshift_deletions, region_start, region_end, position)
 
-    variation_info = pysamstats.load_variation_strand(bamfile, fafile= reference,chrom='NC_045512.2', # TODO loop instead of hard-code
+    variation_info = pysamstats.load_variation_strand(bamfile, fafile= reference,chrom=ref_id,
                                      start=position, end=position+gap_length)
     idx_pos = np.where(variation_info.pos ==position)
 
@@ -187,14 +193,15 @@ def analyse_position(bamfile, reference, position, gap_length, frameshift_deleti
     freq_del_rev = deletions_rev/reads_rev*100 if reads_rev else 0
 
     indels_gene_reg = pysamstats.load_variation_strand(bamfile, fafile=reference,
-                                                        chrom='NC_045512.2', # TODO loop instead of hard-code
+                                                        chrom=ref_id,
                                                         start=region_start, end=region_end)
     critical_inserts= check_inserts_gene_region(indels_gene_reg,
                                                     region_start, region_end, reads_all)
 
     homopolyeric = check_homopolyeric(variation_info, position, gap_length)
 
-    dict = {'start_position': position+based,
+    dict = {'ref_id': ref_id,
+            'start_position': position+based,
             'length': gap_length,
             'gene_region':gene_region[2],
             'reads_all': reads_all,
@@ -222,7 +229,7 @@ def main():
     reference = args.reference	# e.g.: '../references/NC_045512.2.fasta'
     consensus = args.ref_majority_dels	# e.g.: 'ref_majority_dels.fasta'
 
-    df = pd.DataFrame(columns=('start_position','length','gene_region','reads_all',
+    df = pd.DataFrame(columns=('ref_id','start_position','length','gene_region','reads_all',
                                 'reads_fwd','reads_rev', 'deletions','freq_del',
                                 'freq_del_fwd' ,'freq_del_rev','deletions_fwd',
                                 'deletions_rev','matches_ref','pos_critical_inserts',
@@ -232,9 +239,10 @@ def main():
     all_frame_del =[]
 
     for pos in frameshift_deletions:
+        ref_id = pos[2]
         position = pos[0]
         gap_length = pos[1]
-        pos_dict = analyse_position(bamfile, reference, position, gap_length,
+        pos_dict = analyse_position(bamfile, reference, ref_id, position, gap_length,
                                     frameshift_deletions, based=args.based)
         df = df.append(pos_dict, ignore_index=True)
 
