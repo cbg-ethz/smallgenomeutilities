@@ -30,6 +30,10 @@ def parse_args():
         help="Fasta file containing the reference sequence"
     )
     parser.add_argument(
+        "-0", required=False, dest='based', action='store_const', const=0, default=1,
+        help="Use 0-based (python) instead of 1-based (standard) seq positions"
+    )
+    parser.add_argument(
         "-o", required=False, default=os.path.join(os.getcwd(), 'frameshift_deletions_check.csv'),
         metavar='CSV', dest='outfile', help="Output file"
     )
@@ -127,7 +131,7 @@ def len_del(item_range):
     if item_range[0]==item_range[1]:
         return 1
     else:
-        return item_range[1]- item_range[0]
+        return item_range[1]- item_range[0]+1
 
 #TODO: function listing frameshift insertions
 def list_frameshift_dels(reference, consensus):
@@ -158,7 +162,7 @@ def check_dels_gene_region(frameshift_deletions, region_start, region_end, posit
     return critical_pos
 
 
-def analyse_position(bamfile, reference, position, gap_length, frameshift_deletions):
+def analyse_position(bamfile, reference, position, gap_length, frameshift_deletions, based=1):
     """
     gather information for current frameshift position.
     """
@@ -190,7 +194,7 @@ def analyse_position(bamfile, reference, position, gap_length, frameshift_deleti
 
     homopolyeric = check_homopolyeric(variation_info, position, gap_length)
 
-    dict = {'start_position': position,
+    dict = {'start_position': position+based,
             'length': gap_length,
             'gene_region':gene_region[2],
             'reads_all': reads_all,
@@ -231,7 +235,7 @@ def main():
         position = pos[0]
         gap_length = pos[1]
         pos_dict = analyse_position(bamfile, reference, position, gap_length,
-                                    frameshift_deletions)
+                                    frameshift_deletions, based=args.based)
         df = df.append(pos_dict, ignore_index=True)
 
     df.to_csv(args.outfile)
