@@ -80,7 +80,7 @@ def parse_gff(genes_gff):
     """
     if genes_gff:
         with open(genes_gff) as gf:
-            return [ (record.id, int(feature.location.start), int(feature.location.end), feature.qualifiers.get('Name', [feature.id])[0]) for record in GFF.parse(gf) for feature in record.features if feature.type == 'gene' ] 
+            return [ (record.id, int(feature.location.start), int(feature.location.end), feature.qualifiers.get('Name', [feature.id])[0]) for record in GFF.parse(gf) for feature in record.features if feature.type == 'gene' ]
     return None
 
 def get_gene_at_position(gene_list, ref_id, position):
@@ -94,9 +94,9 @@ def get_gene_at_position(gene_list, ref_id, position):
 
     return (ref_id, position-10, position+10, '-')
 
-def check_inserts_gene_region(gene_reg_load_variation, region_start, region_end, coverage):
+def check_indels_gene_region(gene_reg_load_variation, region_start, region_end, coverage):
     """
-    check if there are some insertions in the gene-region-interval(*) that occur in
+    check if there are some indels in the gene-region-interval(*) that occur in
     more than 40% of the reads. If so, returns the position of those insertions.
     ---
     (*): or at least the part that got coverage
@@ -105,12 +105,12 @@ def check_inserts_gene_region(gene_reg_load_variation, region_start, region_end,
     i_end = np.where(gene_reg_load_variation.pos <=region_end)[0][-1]
 
     inserts= gene_reg_load_variation.insertions[i_start:i_end]
-    #dels= gene_reg_load_variation.deletions[i_start:i_end]
+    dels= gene_reg_load_variation.deletions[i_start:i_end]
 
     critical_inserts = [gene_reg_load_variation.pos[i] for i,x in enumerate(inserts) if x > 0.4*coverage]
-    #critical_dels = [item for item in dels if item > 0.4*coverage]
+    critical_dels = [item for item in dels if item > 0.4*coverage]
 
-    return critical_inserts
+    return critical_inserts, critical_dels
 
 def ranges(nums):
     """
@@ -131,27 +131,63 @@ def len_del(item_range):
     """
     return item_range[1]- item_range[0]+1
 
-#TODO: function listing frameshift insertions
-def list_frameshift_dels(reference, consensus):
-    """
-    Goes through consensus and detects deletions that are not a multiple of 3.
-    """
-
+def list_frameshift_inserts(aligned_seqs):
+    '''
+    returns list with starting position of frameshift_inserts and their resepective length as tuple: (start_pos, length)
+    '''
+    consensus_seq = aligned_seqs[1]
+    reference_seq = aligned_seqs[0]
     pos_length_list = []
-    for seq_record, ref_record in zip(SeqIO.parse(consensus, "fasta"), SeqIO.parse(reference, "fasta")):
-        # HACK assume seq_record have same order as ref_record
-        # TODO test to multi-segemented viruses before the next flu pandemic
-        print(f"{seq_record.id} mapped to {ref_record.id}")
+    insert_pos = [i for i,x in enumerate(reference_seq.seq) if x =="-"]
 
-        seq = seq_record.seq
-        del_pos = [i for i,x in enumerate(seq) if x =="-"]
-
-        for item_range in ranges(del_pos):
-            # only frameshift deletions , i.e. deletion lenght not dividible by 3
+    for item_range in ranges(insert_pos):
+            # only frameshift insertions , i.e. insert lenght not dividible by 3
             if len_del(item_range)%3 !=0:
-                pos_length_list.append([item_range[0],len_del(item_range),ref_record.id,seq_record.id])
+                pos_length_list.append([item_range[0],len_del(item_range), reference_seq.id, consensus_seq.id, 'insertion'])
 
     return pos_length_list
+
+def list_frameshift_dels(aligned_seqs):
+    '''
+    returns list with starting position of frameshift_dels and their resepective length as tuple: (start_pos, length)
+    '''
+    consensus_seq = aligned_seqs[1]
+    reference_seq = aligned_seqs[0]
+    pos_length_list = []
+    del_pos = [i for i,x in enumerate(consensus_seq.seq) if x =="-"]
+
+    for item_range in ranges(del_pos):
+            # only frameshift deletions , i.e. deletion lenght not dividible by 3
+            if len_del(item_range)%3 !=0:
+                pos_length_list.append([item_range[0],len_del(item_range),reference_seq.id, consensus_seq.id, 'deletion'])
+
+    return pos_length_list
+
+def align(reference, consensus):
+    from Bio.Align.Applications import MafftCommandline
+    from io import StringIO
+    from Bio import AlignIO
+    import tempfile
+
+    with open(reference) as fp:
+        ref_data=fp.read()
+    with open(consensus) as fp:
+        cons_data=fp.read()
+
+    data=ref_data+"\n"+cons_data
+
+    tmp = tempfile.NamedTemporaryFile()
+
+    # Open the file for writing.
+    with open(tmp.name, 'w') as f:
+        f.write(data)
+        f.seek(0)
+
+    mafft_cline = MafftCommandline(input=tmp.name)
+    stdout, stderr = mafft_cline()
+    align = AlignIO.read(StringIO(stdout), "fasta")
+
+    return align
 
 def check_dels_gene_region(frameshift_deletions, region_start, region_end, position):
     """
@@ -165,8 +201,31 @@ def check_dels_gene_region(frameshift_deletions, region_start, region_end, posit
 
     return critical_pos
 
+def correct_positions(list_dels,list_inserts):
+    '''
+    Insertions shift the positions --> shift back to reference seq space
+    Correct to zero-based (we need this for pysamstats).
+    '''
+    # correct deletions shifted due to insertions occuring before
+    for count, insert in enumerate(list_inserts):
+        for deletion in list_dels:
+            if deletion[0] > insert[0]:
+                deletion[0]-=1
+    # shift insertions due to insertions occuring before
+    for count, insert in enumerate(list_inserts):
+        for j in range(count+1, len(list_inserts)):
+            if list_inserts[j][0] > insert[0]:
+                list_inserts[j][0]-= 1
+    # shift inseritions to zero-based space
+    for j in range(len(list_inserts)):
+        list_inserts[j][0]-=1
 
-def analyse_position(bamfile, reference, ref_id, position, gap_length, gene_list, frameshift_deletions, cons_id='', based=1):
+    corrected_insert = list_inserts
+    corrected_dels =list_dels
+
+    return corrected_insert, corrected_dels
+
+def analyse_position(bamfile, reference, ref_id, position, gap_length, gene_list, cons_id='', based=1):
     """
     gather information for current frameshift position.
     """
@@ -174,7 +233,7 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, gene_list
     region_start =gene_region[1]
     region_end = gene_region[2]
 
-    critical_dels = check_dels_gene_region(frameshift_deletions, region_start, region_end, position)
+    #critical_dels = check_dels_gene_region(frameshift_deletions, region_start, region_end, position)
 
     variation_info = pysamstats.load_variation_strand(bamfile, fafile= reference,chrom=ref_id,
                                      start=position, end=position+gap_length)
@@ -183,6 +242,7 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, gene_list
     reads_all = variation_info[idx_pos].reads_all[0]
     reads_fwd = variation_info[idx_pos].reads_fwd[0]
     reads_rev = variation_info[idx_pos].reads_rev[0]
+
     deletions = variation_info[idx_pos].deletions[0]
     freq_del = deletions/reads_all*100
     deletions_fwd = variation_info[idx_pos].deletions_fwd[0]
@@ -190,10 +250,17 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, gene_list
     deletions_rev = variation_info[idx_pos].deletions_rev[0]
     freq_del_rev = deletions_rev/reads_rev*100 if reads_rev else 0
 
+    insertions = variation_info[idx_pos].insertions[0]
+    freq_insert = insertions/reads_all*100
+    insertions_fwd = variation_info[idx_pos].insertions_fwd[0]
+    freq_insert_fwd = insertions_fwd/reads_fwd*100 if reads_fwd else 0
+    insertions_rev = variation_info[idx_pos].insertions_rev[0]
+    freq_insert_rev = insertions_rev/reads_rev*100 if reads_rev else 0
+
     indels_gene_reg = pysamstats.load_variation_strand(bamfile, fafile=reference,
                                                         chrom=ref_id,
                                                         start=region_start, end=region_end)
-    critical_inserts= check_inserts_gene_region(indels_gene_reg,
+    critical_inserts, critical_dels= check_indels_gene_region(indels_gene_reg,
                                                     region_start, region_end, reads_all)
 
     homopolyeric = check_homopolyeric(variation_info, position, gap_length)
@@ -211,6 +278,12 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, gene_list
             'freq_del_rev':freq_del_rev,
             'deletions_fwd': deletions_fwd,
             'deletions_rev': deletions_rev,
+            'insertions': insertions,
+            'freq_del': freq_del,
+            'freq_insert_fwd': freq_insert_fwd ,
+            'freq_insert_rev':freq_insert_rev,
+            'insertions_fwd': insertions_fwd,
+            'insertions_rev': insertions_rev,
             'matches_ref': variation_info[idx_pos].matches[0],
             'pos_critical_inserts': critical_inserts,
             'pos_critical_dels': critical_dels,
@@ -230,23 +303,31 @@ def main():
 
     gene_list = parse_gff(args.genes_gff) # e.g.: 'Genes_NC_045512.2.GFF3'
 
-    df = pd.DataFrame(columns=('ref_id','start_position','length','gene_region','reads_all',
+    df = pd.DataFrame(columns=('ref_id','start_position','length','INDEL','gene_region','reads_all',
                                 'reads_fwd','reads_rev', 'deletions','freq_del',
                                 'freq_del_fwd' ,'freq_del_rev','deletions_fwd',
-                                'deletions_rev','matches_ref','pos_critical_inserts',
+                                'deletions_rev','insertions','freq_del','freq_insert_fwd','freq_insert_rev',
+                                'insertions_fwd','insertions_rev','matches_ref','pos_critical_inserts',
                                 'pos_critical_dels','homopolymeric','ref_base','cons_id'))
 
-    frameshift_deletions = list_frameshift_dels(reference, consensus)
+
+    algin_seqs = align(reference, consensus)
+    list_dels= list_frameshift_dels(algin_seqs)
+    list_inserts= list_frameshift_inserts(algin_seqs)
+
+    corrected_insert, corrected_dels = correct_positions(list_dels,list_inserts)
+    
     all_frame_del =[]
 
-    for pos in frameshift_deletions:
+    for pos in corrected_dels+corrected_insert:
         ref_id = pos[2]
-        position = pos[0]
-        gap_length = pos[1]
+        position = int(pos[0])
+        gap_length = int(pos[1])
         cons_id = pos[3]
+        type = pos[4]
         pos_dict = analyse_position(bamfile, reference, ref_id, position, gap_length,
-                                    gene_list, frameshift_deletions,
-                                    cons_id, based=args.based)
+                                    gene_list,cons_id, based=args.based)
+        pos_dict.update({'INDEL': type})
         df = df.append(pos_dict, ignore_index=True)
 
     df.to_csv(args.outfile)
