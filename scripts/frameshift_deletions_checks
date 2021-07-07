@@ -16,31 +16,43 @@ def parse_args():
     """ Set up the parsing of command-line arguments """
     parser = argparse.ArgumentParser(
             description="Script to construct consensus sequences",
-            epilog="gene_region: Gene in which the deletion is found according to -g argument; reads_all: Total number of reads covering the indel; reads_fwd: Total nubmer of forward reads covering the indel; reads_rev: Total nubmer of reverse reads covering the indel; deletions/insertions: Number of reads supporting the deletion/insertion; freq_del/freq_insert: Fraction of reads supporting the deletion/insertion; matches_ref: number of reads that matche with the reference base; pos_critical_inserts: Start positions of insertions in the same gene_region that occur in > 40% of reads; pos_critical_dels: Start positions of deletions in the same gene_region that occur in > 40% of reads; homopolymeric: True if either around the start or end position of the deletion three bases are the same, which may have caused the polymerase to skip during reverse transcription of viral RNA to cDNA, e.g. AATAG; ref_base: base in the reference genome ",
+            epilog="""columns signification:
+	gene_region: Gene in which the deletion is found according to -g argument;
+	reads_all: Total number of reads covering the indel;
+	reads_fwd: Total nubmer of forward reads covering the indel;
+	reads_rev: Total nubmer of reverse reads covering the indel;
+	deletions/insertions: Number of reads supporting the deletion/insertion;
+	freq_del/freq_insert: Fraction of reads supporting the deletion/insertion;
+	matches_ref: number of reads that matche with the reference base;
+	pos_critical_inserts: Start positions of insertions in the same gene_region that occur in > 40% of reads;
+	pos_critical_dels: Start positions of deletions in the same gene_region that occur in > 40% of reads;
+	homopolymeric: True if either around the start or end position of the deletion three bases are the same, which may have caused the polymerase to skip during reverse transcription of viral RNA to cDNA, e.g. AATAG;
+	ref_base: base in the reference genome
+""",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
-        "-i", required=True, metavar='BAM', dest='bamfile',
+        "-i", "--input", required=True, metavar='BAM', dest='bamfile',
         help="Input BAM file"
     )
-    parser.add_argument(
-        "-c", required=True, metavar='FASTA', dest='ref_majority_dels', type=str,
+    requiredNamed.add_argument(
+        "-c", "--consensus", required=True, metavar='FASTA', dest='ref_majority_dels', type=str,
         help="Fasta file containing the ref_majority_dels consensus sequence"
     )
-    parser.add_argument(
-        "-f", required=True, metavar='FASTA', dest='reference', type=str,
+    requiredNamed.add_argument(
+        "-f", "--reference", required=True, metavar='FASTA', dest='reference', type=str,
         help="Fasta file containing the reference sequence"
     )
-    parser.add_argument(
-        "-g", required=True, metavar='GFF', dest='genes_gff', type=str,
+    requiredNamed.add_argument(
+        "-g", "--genes", required=True, metavar='GFF', dest='genes_gff', type=str,
         help="GFF file listing genes positions on the reference sequence"
     )
     parser.add_argument(
-        "-0", required=False, dest='based', action='store_const', const=0, default=1,
+        "-0", "--zero-based", required=False, dest='based', action='store_const', const=0, default=1,
         help="Use 0-based (python) instead of 1-based (standard) seq positions"
     )
     parser.add_argument(
-        "-o", required=False, default=os.path.join(os.getcwd(), 'frameshift_deletions_check.csv'),
+        "-o", "--output", required=False, default=os.path.join(os.getcwd(), 'frameshift_deletions_check.csv'),
         metavar='CSV', dest='outfile', help="Output file"
     )
     return parser.parse_args()
@@ -280,7 +292,7 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, gene_list
             'deletions_fwd': deletions_fwd,
             'deletions_rev': deletions_rev,
             'insertions': insertions,
-            'freq_del': freq_del,
+            'freq_insert': freq_insert,
             'freq_insert_fwd': freq_insert_fwd ,
             'freq_insert_rev':freq_insert_rev,
             'insertions_fwd': insertions_fwd,
@@ -304,12 +316,14 @@ def main():
 
     gene_list = parse_gff(args.genes_gff) # e.g.: 'Genes_NC_045512.2.GFF3'
 
-    df = pd.DataFrame(columns=('ref_id','start_position','length','INDEL','gene_region','reads_all',
-                                'reads_fwd','reads_rev', 'deletions','freq_del',
-                                'freq_del_fwd' ,'freq_del_rev','deletions_fwd',
-                                'deletions_rev','insertions','freq_del','freq_insert_fwd','freq_insert_rev',
-                                'insertions_fwd','insertions_rev','matches_ref','pos_critical_inserts',
-                                'pos_critical_dels','homopolymeric','ref_base','cons_id'))
+    df = pd.DataFrame(columns=('ref_id','start_position','length','INDEL','gene_region',
+                                'reads_all','reads_fwd','reads_rev',
+                                'deletions','freq_del','freq_del_fwd','freq_del_rev',
+                                'deletions_fwd','deletions_rev',
+                                'insertions','freq_insert','freq_insert_fwd','freq_insert_rev',
+                                'insertions_fwd','insertions_rev',
+                                'matches_ref','pos_critical_inserts','pos_critical_dels',
+                                'homopolymeric','ref_base','cons_id'))
 
 
     algin_seqs = align(reference, consensus)
@@ -325,10 +339,10 @@ def main():
         position = int(pos[0])
         gap_length = int(pos[1])
         cons_id = pos[3]
-        type = pos[4]
+        indel_type = pos[4]
         pos_dict = analyse_position(bamfile, reference, ref_id, position, gap_length,
                                     gene_list,cons_id, based=args.based)
-        pos_dict.update({'INDEL': type})
+        pos_dict.update({'INDEL': indel_type})
         df = df.append(pos_dict, ignore_index=True)
 
     df.to_csv(args.outfile)
