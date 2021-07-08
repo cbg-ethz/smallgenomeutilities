@@ -35,6 +35,7 @@ setup(
         "scripts/extract_coverage_intervals",
         "scripts/extract_sam",
         "scripts/extract_seq",
+        "scripts/frameshift_deletions_checks",
         "scripts/gather_coverage",
         "scripts/mapper",
         "scripts/min_coverage",

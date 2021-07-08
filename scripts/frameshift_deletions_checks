@@ -14,26 +14,29 @@ import pandas as pd
 
 def parse_args():
     """ Set up the parsing of command-line arguments """
+
+    # keep lines in epilog ; but keep the defaults in the list
+    class Formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter): pass
+
     parser = argparse.ArgumentParser(
-            description="Script to construct consensus sequences",
-            epilog="""columns signification:
-	gene_region: Gene in which the deletion is found according to -g argument;
-	reads_all: Total number of reads covering the indel;
-	reads_fwd: Total nubmer of forward reads covering the indel;
-	reads_rev: Total nubmer of reverse reads covering the indel;
-	deletions/insertions: Number of reads supporting the deletion/insertion;
-	freq_del/freq_insert: Fraction of reads supporting the deletion/insertion;
-	matches_ref: number of reads that matche with the reference base;
-	pos_critical_inserts: Start positions of insertions in the same gene_region that occur in > 40% of reads;
-	pos_critical_dels: Start positions of deletions in the same gene_region that occur in > 40% of reads;
-	homopolymeric: True if either around the start or end position of the deletion three bases are the same, which may have caused the polymerase to skip during reverse transcription of viral RNA to cDNA, e.g. AATAG;
-	ref_base: base in the reference genome
-""",
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        description="Produces a report about frameshifting indels in a consensus sequences",
+        epilog=u"""columns signification:
+	[gene_region]: Gene in which the deletion is found according to -g argument;
+	[reads_all]: Total number of reads covering the indel;
+	[reads_fwd]: Total nubmer of forward reads covering the indel;
+	[reads_rev]: Total nubmer of reverse reads covering the indel;
+	[deletions/insertions]: Number of reads supporting the deletion/insertion;
+	[freq_del/freq_insert]: Fraction of reads supporting the deletion/insertion;
+	[matches_ref]: number of reads that matche with the reference base;
+	[pos_critical_inserts]: Start positions of insertions in the same gene_region that occur in > 40% of reads;
+	[pos_critical_dels]: Start positions of deletions in the same gene_region that occur in > 40% of reads;
+	[homopolymeric]: True if either around the start or end position of the deletion three bases are the same, which may have caused the polymerase to skip during reverse transcription of viral RNA to cDNA, e.g. AATAG;
+	[ref_base]: base in the reference genome""",
+        formatter_class=Formatter)
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
         "-i", "--input", required=True, metavar='BAM', dest='bamfile',
-        help="Input BAM file"
+        help="Input BAM file, aligned against the reference"
     )
     requiredNamed.add_argument(
         "-c", "--consensus", required=True, metavar='FASTA', dest='ref_majority_dels', type=str,
@@ -41,7 +44,7 @@ def parse_args():
     )
     requiredNamed.add_argument(
         "-f", "--reference", required=True, metavar='FASTA', dest='reference', type=str,
-        help="Fasta file containing the reference sequence"
+        help="Fasta file containing the reference sequence to compare against"
     )
     requiredNamed.add_argument(
         "-g", "--genes", required=True, metavar='GFF', dest='genes_gff', type=str,
@@ -107,23 +110,31 @@ def get_gene_at_position(gene_list, ref_id, position):
 
     return (ref_id, position-10, position+10, '-')
 
-def check_indels_gene_region(gene_reg_load_variation, curr_pos, gap_length, indel_type, region_start, region_end, coverage):
+def check_indels_gene_region(gene_reg_load_variation, curr_pos, gap_length, indel_type, region_start, region_end, based):
     """
     check if there are some indels in the gene-region-interval(*) that occur in
     more than 40% of the reads. If so, returns the position of those insertions.
     ---
     (*): or at least the part that got coverage
     """
+
+    # clip the request to position for which we have information. Worse-case scenario: begins or ends with the indel
     i_start = np.where(gene_reg_load_variation.pos >=region_start)[0][0]
     i_end = np.where(gene_reg_load_variation.pos <=region_end)[0][-1]
 
+    # NOTE the index of these scrutures will be same across all,
+    # BUT will not correspond to the actual position
     indel_pos = gene_reg_load_variation.pos[i_start:i_end]
     reads_all = gene_reg_load_variation.reads_all[i_start:i_end]
     inserts= gene_reg_load_variation.insertions[i_start:i_end]
     dels= gene_reg_load_variation.deletions[i_start:i_end]
 
-    critical_inserts = [indel_pos[i]+1 for i,x in enumerate(inserts) if (x > 0.4*reads_all[i]) and (indel_type=='deletion' or indel_pos[i]!=curr_pos)]
-    critical_dels = [indel_pos[i]+1 for i,x in enumerate(dels) if (x > 0.4*reads_all[i]) and ((indel_type=='insertion') or (indel_pos[i] not in range(curr_pos, curr_pos+gap_length)))]
+    # NOTE When looking for an insert:
+    # - we will not list the insert *itself*
+    # - we *will* list overlapping *deletions* on other reads.
+    # And vice-versa for deletions.
+    critical_inserts = [indel_pos[i]+based for i,x in enumerate(inserts) if (x > 0.4*reads_all[i]) and (indel_type=='deletion' or indel_pos[i]!=curr_pos)]
+    critical_dels = [indel_pos[i]+based for i,x in enumerate(dels) if (x > 0.4*reads_all[i]) and ((indel_type=='insertion') or (indel_pos[i] not in range(curr_pos, curr_pos+gap_length)))]
 
     return critical_inserts, critical_dels
 
@@ -148,7 +159,7 @@ def len_del(item_range):
 
 def list_all_inserts(aligned_seqs):
     '''
-    returns list with starting position of frameshift_inserts and their resepective length as tuple: (start_pos, length)
+    returns list with starting position of _all_ inserts and their resepective length as tuple: (start_pos, length)
     '''
     consensus_seq = aligned_seqs[1]
     reference_seq = aligned_seqs[0]
@@ -156,15 +167,13 @@ def list_all_inserts(aligned_seqs):
     insert_pos = [i for i,x in enumerate(reference_seq.seq) if x =="-"]
 
     for item_range in ranges(insert_pos):
-            # only frameshift insertions , i.e. insert lenght not dividible by 3
-            #if len_del(item_range)%3 !=0:
-            pos_length_list.append([item_range[0],len_del(item_range), reference_seq.id, consensus_seq.id, 'insertion'])
+        pos_length_list.append([item_range[0],len_del(item_range), reference_seq.id, consensus_seq.id, 'insertion'])
 
     return pos_length_list
 
 def list_all_dels(aligned_seqs):
     '''
-    returns list with starting position of frameshift_dels and their resepective length as tuple: (start_pos, length)
+    returns list with starting position of _all_  dels and their resepective length as tuple: (start_pos, length)
     '''
     consensus_seq = aligned_seqs[1]
     reference_seq = aligned_seqs[0]
@@ -172,13 +181,18 @@ def list_all_dels(aligned_seqs):
     del_pos = [i for i,x in enumerate(consensus_seq.seq) if x =="-"]
 
     for item_range in ranges(del_pos):
-            # only frameshift deletions , i.e. deletion lenght not dividible by 3
-            #if len_del(item_range)%3 !=0:
-            pos_length_list.append([item_range[0],len_del(item_range),reference_seq.id, consensus_seq.id, 'deletion'])
+        pos_length_list.append([item_range[0],len_del(item_range),reference_seq.id, consensus_seq.id, 'deletion'])
 
     return pos_length_list
 
 def align(reference, consensus):
+    """
+    we rely on a MAFFT alignment, in order to:
+    - detect deletions in consensuses from callers that do not mark them
+      (e.g.: bcftools without the `--mark-dels '-'` option)
+    - detect insertions in the consensus
+        (will appear as deletions *in the reference*)
+    """
     from Bio.Align.Applications import MafftCommandline
     from io import StringIO
     from Bio import AlignIO
@@ -189,8 +203,10 @@ def align(reference, consensus):
     with open(consensus) as fp:
         cons_data=fp.read()
 
+    # TODO support multi-segmented viruses
     data=ref_data+"\n"+cons_data
 
+    # NOTE this also handles properly TMPDIR on clusters
     tmp = tempfile.NamedTemporaryFile()
 
     # Open the file for writing.
@@ -276,7 +292,7 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_typ
                                                         chrom=ref_id,
                                                         start=region_start, end=region_end)
     critical_inserts, critical_dels= check_indels_gene_region(indels_gene_reg,position, gap_length, indel_type,
-                                                    region_start, region_end, reads_all)
+                                                    region_start, region_end, based)
 
     homopolyeric = check_homopolyeric(variation_info, position, gap_length)
 
@@ -329,10 +345,11 @@ def main():
 
 
     algin_seqs = align(reference, consensus)
-    list_dels= list_all_dels(algin_seqs)
-    list_inserts= list_all_inserts(algin_seqs)
+    align_dels= list_all_dels(algin_seqs)
+    align_inserts= list_all_inserts(algin_seqs)
 
-    corrected_insert, corrected_dels = correct_positions(list_dels,list_inserts)
+    # convert coordinate from pair-alignment space to reference-space
+    corrected_insert, corrected_dels = correct_positions(align_dels,align_inserts)
 
     all_frame_del =[]
 
@@ -343,6 +360,7 @@ def main():
         cons_id = pos[3]
         indel_type = pos[4]
         if gap_length%3==0:
+            # only frameshift insertions , i.e. insert lenght not dividible by 3
             continue
         pos_dict = analyse_position(bamfile, reference, ref_id, position, gap_length,indel_type,
                                     gene_list,cons_id, based=args.based)

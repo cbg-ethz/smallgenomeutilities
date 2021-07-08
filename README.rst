@@ -10,11 +10,16 @@ Dependencies
 ************
 
 - biopython
+- bcbio-gff
 - numpy
+- pandas
 - progress
 - pysam
+- pysamstats
 - sklearn
 - matplotlib
+- progress
+- yaml
 
 ************
 Installation
@@ -30,6 +35,10 @@ The recommended way to install the smallgenomeutilities is using pip:
 ************************
 Description of utilities
 ************************
+
+aln2basecnt
+-----------
+extract base counts and coverage information from a single alignment file
 
 compute_mds
 -----------
@@ -67,9 +76,21 @@ extract_seq
 -----------
 Extract sequences of alignments into a FASTA file where the sequence id matches a given string.
 
+frameshift_deletions_checks
+---------------------------
+Produce a report about frameshifting indels in a consensus sequences
+
+gather_coverage
+---------------
+gather multiple per sample coverage information into a single unified file
+
 mapper
 ------
 Determine the genomic offsets on a target contig, given an initial contig and offsets. Can be used to map between reference genomes.
+
+min_coverage
+------------
+find the minimum coverage in a region from an alignment
 
 minority_freq
 -------------
@@ -94,3 +115,5 @@ Contributions
 
 - David Seifert <david.seifert@bsse.ethz.ch>
 - Susana Posada Cespedes <susana.posada@bsse.ethz.ch>
+- Ivan Blagoev Topolsky <ivan.topolsky@sib.swiss>
+- Lara Fuhrmann <lara.fuhrmann@bsse.ethz.ch>
