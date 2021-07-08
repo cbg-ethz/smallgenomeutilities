@@ -9,6 +9,7 @@ from Bio import SeqIO
 from Bio import AlignIO
 from Bio.Align.Applications import MafftCommandline
 from BCBio import GFF
+import operator
 import argparse
 import re
 import os
@@ -280,11 +281,20 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_typ
     region_start =gene_region[1]
     region_end = gene_region[2]
 
-    #critical_dels = check_dels_gene_region(frameshift_deletions, region_start, region_end, position)
+    if (analyse_position.ref_id == ref_id and analyse_position.region_start==region_start and analyse_position.region_end==region_end):
+        # cache hit! no need to reparse the BAM file!
+        variation_info = analyse_position.indels_gene_reg
+    else:
+        analyse_position.indels_gene_reg = variation_info = pysamstats.load_variation_strand(bamfile, fafile=reference,
+                                     chrom=ref_id,
+                                     start=region_start, end=region_end)
+        # NOTE the region of interest covers the position anyway, so we can re-use the cache of the whole region stats
+                                     #start=position, end=position+gap_length)
+        analyse_position.ref_id=ref_id
+        analyse_position.region_start=region_start
+        analyse_position.region_end=region_end
 
-    # TODO cache pysamstats
-    variation_info = pysamstats.load_variation_strand(bamfile, fafile= reference,chrom=ref_id,
-                                     start=position, end=position+gap_length)
+
     idx_pos = np.where(variation_info.pos==position)
     if(idx_pos[0].size==0):
         # see MAFFT's BUG mentionned in align()
@@ -309,10 +319,8 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_typ
     insertions_rev = variation_info[idx_pos].insertions_rev[0]
     freq_insert_rev = insertions_rev/reads_rev*100 if reads_rev else 0
 
-    # TODO cache pysamstats
-    indels_gene_reg = pysamstats.load_variation_strand(bamfile, fafile=reference,
-                                                        chrom=ref_id,
-                                                        start=region_start, end=region_end)
+    # NOTE the region of interest covers the position anyway, so we can re-use the whole region stats
+    indels_gene_reg = analyse_position.indels_gene_reg
     critical_inserts, critical_dels= check_indels_gene_region(indels_gene_reg,position, gap_length, indel_type,
                                                     region_start, region_end, based)
 
@@ -347,6 +355,11 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_typ
            }
 
     return dict
+# keep a static cache between calls
+analyse_position.ref_id=None
+analyse_position.region_start=None
+analyse_position.region_end=None
+analyse_position.indels_gene_reg=None
 
 def main():
 
@@ -380,7 +393,8 @@ def main():
         # convert coordinate from pair-alignment space to reference-space
         corrected_insert, corrected_dels = correct_positions(align_dels,align_inserts)
 
-        for pos in corrected_dels+corrected_insert:
+        # sort by ref_id, then by position to optimize cache hits in analyse_position
+        for pos in sorted(corrected_dels+corrected_insert, key=operator.itemgetter(2,0)):
             ref_id = pos[2]
             position = int(pos[0])
             gap_length = int(pos[1])
