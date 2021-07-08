@@ -107,7 +107,7 @@ def get_gene_at_position(gene_list, ref_id, position):
 
     return (ref_id, position-10, position+10, '-')
 
-def check_indels_gene_region(gene_reg_load_variation, region_start, region_end, coverage):
+def check_indels_gene_region(gene_reg_load_variation, curr_pos, gap_length, indel_type, region_start, region_end, coverage):
     """
     check if there are some indels in the gene-region-interval(*) that occur in
     more than 40% of the reads. If so, returns the position of those insertions.
@@ -117,11 +117,13 @@ def check_indels_gene_region(gene_reg_load_variation, region_start, region_end, 
     i_start = np.where(gene_reg_load_variation.pos >=region_start)[0][0]
     i_end = np.where(gene_reg_load_variation.pos <=region_end)[0][-1]
 
+    indel_pos = gene_reg_load_variation.pos[i_start:i_end]
+    reads_all = gene_reg_load_variation.reads_all[i_start:i_end]
     inserts= gene_reg_load_variation.insertions[i_start:i_end]
     dels= gene_reg_load_variation.deletions[i_start:i_end]
 
-    critical_inserts = [gene_reg_load_variation.pos[i] for i,x in enumerate(inserts) if x > 0.4*coverage]
-    critical_dels = [item for item in dels if item > 0.4*coverage]
+    critical_inserts = [indel_pos[i]+1 for i,x in enumerate(inserts) if (x > 0.4*reads_all[i]) and (indel_type=='deletion' or indel_pos[i]!=curr_pos)]
+    critical_dels = [indel_pos[i]+1 for i,x in enumerate(dels) if (x > 0.4*reads_all[i]) and ((indel_type=='insertion') or (indel_pos[i] not in range(curr_pos, curr_pos+gap_length)))]
 
     return critical_inserts, critical_dels
 
@@ -144,7 +146,7 @@ def len_del(item_range):
     """
     return item_range[1]- item_range[0]+1
 
-def list_frameshift_inserts(aligned_seqs):
+def list_all_inserts(aligned_seqs):
     '''
     returns list with starting position of frameshift_inserts and their resepective length as tuple: (start_pos, length)
     '''
@@ -155,12 +157,12 @@ def list_frameshift_inserts(aligned_seqs):
 
     for item_range in ranges(insert_pos):
             # only frameshift insertions , i.e. insert lenght not dividible by 3
-            if len_del(item_range)%3 !=0:
-                pos_length_list.append([item_range[0],len_del(item_range), reference_seq.id, consensus_seq.id, 'insertion'])
+            #if len_del(item_range)%3 !=0:
+            pos_length_list.append([item_range[0],len_del(item_range), reference_seq.id, consensus_seq.id, 'insertion'])
 
     return pos_length_list
 
-def list_frameshift_dels(aligned_seqs):
+def list_all_dels(aligned_seqs):
     '''
     returns list with starting position of frameshift_dels and their resepective length as tuple: (start_pos, length)
     '''
@@ -171,8 +173,8 @@ def list_frameshift_dels(aligned_seqs):
 
     for item_range in ranges(del_pos):
             # only frameshift deletions , i.e. deletion lenght not dividible by 3
-            if len_del(item_range)%3 !=0:
-                pos_length_list.append([item_range[0],len_del(item_range),reference_seq.id, consensus_seq.id, 'deletion'])
+            #if len_del(item_range)%3 !=0:
+            pos_length_list.append([item_range[0],len_del(item_range),reference_seq.id, consensus_seq.id, 'deletion'])
 
     return pos_length_list
 
@@ -223,12 +225,12 @@ def correct_positions(list_dels,list_inserts):
     for count, insert in enumerate(list_inserts):
         for deletion in list_dels:
             if deletion[0] > insert[0]:
-                deletion[0]-=1
+                deletion[0]-=insert[1]
     # shift insertions due to insertions occuring before
     for count, insert in enumerate(list_inserts):
         for j in range(count+1, len(list_inserts)):
             if list_inserts[j][0] > insert[0]:
-                list_inserts[j][0]-= 1
+                list_inserts[j][0]-=insert[1]
     # shift inseritions to zero-based space
     for j in range(len(list_inserts)):
         list_inserts[j][0]-=1
@@ -238,7 +240,7 @@ def correct_positions(list_dels,list_inserts):
 
     return corrected_insert, corrected_dels
 
-def analyse_position(bamfile, reference, ref_id, position, gap_length, gene_list, cons_id='', based=1):
+def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_type, gene_list, cons_id='', based=1):
     """
     gather information for current frameshift position.
     """
@@ -273,7 +275,7 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, gene_list
     indels_gene_reg = pysamstats.load_variation_strand(bamfile, fafile=reference,
                                                         chrom=ref_id,
                                                         start=region_start, end=region_end)
-    critical_inserts, critical_dels= check_indels_gene_region(indels_gene_reg,
+    critical_inserts, critical_dels= check_indels_gene_region(indels_gene_reg,position, gap_length, indel_type,
                                                     region_start, region_end, reads_all)
 
     homopolyeric = check_homopolyeric(variation_info, position, gap_length)
@@ -327,8 +329,8 @@ def main():
 
 
     algin_seqs = align(reference, consensus)
-    list_dels= list_frameshift_dels(algin_seqs)
-    list_inserts= list_frameshift_inserts(algin_seqs)
+    list_dels= list_all_dels(algin_seqs)
+    list_inserts= list_all_inserts(algin_seqs)
 
     corrected_insert, corrected_dels = correct_positions(list_dels,list_inserts)
 
@@ -340,7 +342,9 @@ def main():
         gap_length = int(pos[1])
         cons_id = pos[3]
         indel_type = pos[4]
-        pos_dict = analyse_position(bamfile, reference, ref_id, position, gap_length,
+        if gap_length%3==0:
+            continue
+        pos_dict = analyse_position(bamfile, reference, ref_id, position, gap_length,indel_type,
                                     gene_list,cons_id, based=args.based)
         pos_dict.update({'INDEL': indel_type})
         df = df.append(pos_dict, ignore_index=True)
