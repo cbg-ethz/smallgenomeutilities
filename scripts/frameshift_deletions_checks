@@ -4,11 +4,16 @@ import pysam
 import pysamstats
 import numpy as np
 import pandas as pd
-import os
+from io import StringIO
 from Bio import SeqIO
+from Bio import AlignIO
+from Bio.Align.Applications import MafftCommandline
 from BCBio import GFF
 import argparse
-import pandas as pd
+import re
+import os
+import tempfile
+import sys
 
 
 
@@ -161,13 +166,12 @@ def list_all_inserts(aligned_seqs):
     '''
     returns list with starting position of _all_ inserts and their resepective length as tuple: (start_pos, length)
     '''
-    consensus_seq = aligned_seqs[1]
-    reference_seq = aligned_seqs[0]
     pos_length_list = []
-    insert_pos = [i for i,x in enumerate(reference_seq.seq) if x =="-"]
+    for reference_seq, consensus_seq in zip(*[iter(aligned_seqs)]*2):
+        insert_pos = [i for i,x in enumerate(reference_seq.seq) if x =="-"]
 
-    for item_range in ranges(insert_pos):
-        pos_length_list.append([item_range[0],len_del(item_range), reference_seq.id, consensus_seq.id, 'insertion'])
+        for item_range in ranges(insert_pos):
+            pos_length_list.append([item_range[0],len_del(item_range), reference_seq.id, consensus_seq.id, 'insertion'])
 
     return pos_length_list
 
@@ -175,13 +179,12 @@ def list_all_dels(aligned_seqs):
     '''
     returns list with starting position of _all_  dels and their resepective length as tuple: (start_pos, length)
     '''
-    consensus_seq = aligned_seqs[1]
-    reference_seq = aligned_seqs[0]
     pos_length_list = []
-    del_pos = [i for i,x in enumerate(consensus_seq.seq) if x =="-"]
+    for reference_seq, consensus_seq in zip(*[iter(aligned_seqs)]*2):
+        del_pos = [i for i,x in enumerate(consensus_seq.seq) if x =="-"]
 
-    for item_range in ranges(del_pos):
-        pos_length_list.append([item_range[0],len_del(item_range),reference_seq.id, consensus_seq.id, 'deletion'])
+        for item_range in ranges(del_pos):
+            pos_length_list.append([item_range[0],len_del(item_range),reference_seq.id, consensus_seq.id, 'deletion'])
 
     return pos_length_list
 
@@ -193,32 +196,45 @@ def align(reference, consensus):
     - detect insertions in the consensus
         (will appear as deletions *in the reference*)
     """
-    from Bio.Align.Applications import MafftCommandline
-    from io import StringIO
-    from Bio import AlignIO
-    import tempfile
 
-    with open(reference) as fp:
-        ref_data=fp.read()
-    with open(consensus) as fp:
-        cons_data=fp.read()
 
-    # TODO support multi-segmented viruses
-    data=ref_data+"\n"+cons_data
+    all_align=[]
 
-    # NOTE this also handles properly TMPDIR on clusters
-    tmp = tempfile.NamedTemporaryFile()
+    # Loop through pairs to avoid MAFFT aligning different unrelated segments
+    for seq_record, ref_record in zip(SeqIO.parse(consensus, "fasta"), SeqIO.parse(reference, "fasta")):
+        # HACK assume seq_record have same order as ref_record
+        # TODO test to multi-segemented viruses before the next flu pandemic
+        print(f"{seq_record.id} mapped to {ref_record.id}")
 
-    # Open the file for writing.
-    with open(tmp.name, 'w') as f:
-        f.write(data)
-        f.seek(0)
+        if (align.rx_only_n.match(str(seq_record.seq))):
+            print(f"Warning: {seq_record.id} contains only <N>s", file=sys.stderr)
+            # BUG MAFFT has a bug where if such a only-<N>s sequence is given as an argument, it will generate an alignement offset by 1 bogus gap at each end:
+            # > Alignment with 2 rows and 29904 columns
+            # > attaaaggtttataccttcccaggtaacaaaccaaccaactttc...aa- NC_045512.2
+            # > -nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn...nnn 100100_31_C02-20200508_J3GT6
+            # these bogus gaps are not supported by any reads and break analyse_position()
+            # we *must* not call MAFFT
+            continue
 
-    mafft_cline = MafftCommandline(input=tmp.name)
-    stdout, stderr = mafft_cline()
-    align = AlignIO.read(StringIO(stdout), "fasta")
+        data=[ref_record, seq_record]
 
-    return align
+        # NOTE this also handles properly TMPDIR on clusters
+        with tempfile.NamedTemporaryFile() as tmp:
+            # Open the file for writing.
+            with open(tmp.name, 'w') as f:
+                SeqIO.write(data, tmp.name, "fasta")
+                f.seek(0)
+
+            mafft_cline = MafftCommandline(input=tmp.name)
+            stdout, stderr = mafft_cline()
+            if (len(stderr)>0):
+                print(mafft_cline, ":", file=sys.stderr)
+                print(stderr, file=sys.stderr)
+            all_align += AlignIO.read(StringIO(stdout), "fasta")
+
+    return all_align
+# static re: only compile it once
+align.rx_only_n=re.compile("^[Nn]+$")
 
 def check_dels_gene_region(frameshift_deletions, region_start, region_end, position):
     """
@@ -266,9 +282,14 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_typ
 
     #critical_dels = check_dels_gene_region(frameshift_deletions, region_start, region_end, position)
 
+    # TODO cache pysamstats
     variation_info = pysamstats.load_variation_strand(bamfile, fafile= reference,chrom=ref_id,
                                      start=position, end=position+gap_length)
-    idx_pos = np.where(variation_info.pos ==position)
+    idx_pos = np.where(variation_info.pos==position)
+    if(idx_pos[0].size==0):
+        # see MAFFT's BUG mentionned in align()
+        print(f"Warning no read mapping to {ref_id}:{position}:+{gap_length}", file=sys.stderr)
+        return { } # empty dict
 
     reads_all = variation_info[idx_pos].reads_all[0]
     reads_fwd = variation_info[idx_pos].reads_fwd[0]
@@ -288,6 +309,7 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_typ
     insertions_rev = variation_info[idx_pos].insertions_rev[0]
     freq_insert_rev = insertions_rev/reads_rev*100 if reads_rev else 0
 
+    # TODO cache pysamstats
     indels_gene_reg = pysamstats.load_variation_strand(bamfile, fafile=reference,
                                                         chrom=ref_id,
                                                         start=region_start, end=region_end)
@@ -299,6 +321,7 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_typ
     dict = {'ref_id': ref_id,
             'start_position': position+based,
             'length': gap_length,
+            'INDEL': indel_type,
             'gene_region':gene_region[3],
             'reads_all': reads_all,
             'reads_fwd': reads_fwd,
@@ -344,28 +367,34 @@ def main():
                                 'homopolymeric','ref_base','cons_id'))
 
 
-    algin_seqs = align(reference, consensus)
-    align_dels= list_all_dels(algin_seqs)
-    align_inserts= list_all_inserts(algin_seqs)
+    align_seqs = align(reference, consensus)
+    if (len(align_seqs)==0):
+        print("Warning: no usable alignment", file=sys.stderr)
+    elif (len(align_seqs)%2!=0):
+        print(f"Fatal error: there are {len(align_seqs)} alignements (odd), they should be in pairs (even)!", file=sys.stderr)
+        sys.exit(1)
+    else:
+        align_dels= list_all_dels(align_seqs)
+        align_inserts= list_all_inserts(align_seqs)
 
-    # convert coordinate from pair-alignment space to reference-space
-    corrected_insert, corrected_dels = correct_positions(align_dels,align_inserts)
+        # convert coordinate from pair-alignment space to reference-space
+        corrected_insert, corrected_dels = correct_positions(align_dels,align_inserts)
 
-    all_frame_del =[]
-
-    for pos in corrected_dels+corrected_insert:
-        ref_id = pos[2]
-        position = int(pos[0])
-        gap_length = int(pos[1])
-        cons_id = pos[3]
-        indel_type = pos[4]
-        if gap_length%3==0:
-            # only frameshift insertions , i.e. insert lenght not dividible by 3
-            continue
-        pos_dict = analyse_position(bamfile, reference, ref_id, position, gap_length,indel_type,
-                                    gene_list,cons_id, based=args.based)
-        pos_dict.update({'INDEL': indel_type})
-        df = df.append(pos_dict, ignore_index=True)
+        for pos in corrected_dels+corrected_insert:
+            ref_id = pos[2]
+            position = int(pos[0])
+            gap_length = int(pos[1])
+            cons_id = pos[3]
+            indel_type = pos[4]
+            if gap_length%3==0:
+                # only frameshift insertions , i.e. insert lenght not dividible by 3
+                continue
+            pos_dict = analyse_position(bamfile, reference, ref_id, position, gap_length,indel_type,
+                                        gene_list,cons_id, based=args.based)
+            if (len(pos_dict)==0):
+                # skip when no information extracted
+                continue
+            df = df.append(pos_dict, ignore_index=True)
 
     df.to_csv(args.outfile)
 
