@@ -66,35 +66,31 @@ def parse_args():
     )
     return parser.parse_args()
 
-def check_homopolyeric(variation_info, position, gap_length):
+def check_homopolyeric(variation_info, position, gap_length, indel_type):
     '''
     return homopolyeric == True if either around the start_position or the end_position
     between the two neighbors 3 are of the same base, eg. AATAG
     '''
-    list =[]
-    idx_pos = np.where(variation_info.pos ==position-1)[0]
-    list.append(variation_info[idx_pos-2].ref[0])
-    list.append(variation_info[idx_pos-1].ref[0])
-    list.append(variation_info[idx_pos].ref[0])
-    list.append(variation_info[idx_pos+1].ref[0])
-    list.append(variation_info[idx_pos+2].ref[0])
-    uni_list = np.unique(list, return_counts=True)
-    if np.max(uni_list[1])>2:
-        return 1
-    else:
-        #check end region of gap
-        list =[]
-        idx_pos = np.where(variation_info.pos ==position+gap_length-1)[0]
-        list.append(variation_info[idx_pos-2].ref[0])
-        list.append(variation_info[idx_pos-1].ref[0])
-        list.append(variation_info[idx_pos].ref[0])
-        list.append(variation_info[idx_pos+1].ref[0])
-        list.append(variation_info[idx_pos+2].ref[0])
-        uni_list = np.unique(list, return_counts=True)
+
+    # NOTE insertions are in reference space, so the end of the insetion is at [position + 1]
+    # whereas deletions' end is at [ position + lenght -1 ]
+    for p in [ position-1, position+(1 if indel_type == 'insertion' else gap_length)-1 ]:
+        nuc_list =[]
+        # list index for [position +/- 2]
+        # also only pick covered psotions (e.g.: "nnnnATTCG-Cnnn" - 'C' is alone, there no reads on position+2)
+        idx_pos = np.where(np.logical_and(variation_info.pos>=p-2, variation_info.pos<=p+2))[0]
+        if idx_pos.size==0:
+            # really broken alignment
+            print(f"Warning no reads around {ref_id}:{position-2}:{position+2} for homopolyeric ?!", file=sys.stderr)
+            continue
+
+        # count all the listed
+        nuc_list=[variation_info[p].ref[0] for p in idx_pos]
+        uni_list = np.unique(nuc_list, return_counts=True)
         if np.max(uni_list[1])>2:
             return 1
-        else:
-            return 0
+
+    return 0
 
 def parse_gff(genes_gff):
     """
@@ -278,7 +274,7 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_typ
     gather information for current frameshift position.
     """
     gene_region= get_gene_at_position(gene_list, ref_id, position)
-    region_start =gene_region[1]
+    region_start = max(gene_region[1], 0)
     region_end = gene_region[2]
 
     if (analyse_position.ref_id == ref_id and analyse_position.region_start==region_start and analyse_position.region_end==region_end):
@@ -324,7 +320,7 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_typ
     critical_inserts, critical_dels= check_indels_gene_region(indels_gene_reg,position, gap_length, indel_type,
                                                     region_start, region_end, based)
 
-    homopolyeric = check_homopolyeric(variation_info, position, gap_length)
+    homopolyeric = check_homopolyeric(variation_info, position, gap_length, indel_type)
 
     dict = {'ref_id': ref_id,
             'start_position': position+based,
