@@ -113,7 +113,7 @@ def get_counts(args):
 
     with pysam.AlignmentFile(bamfile, 'rc' if os.path.splitext(bamfile)[1] == '.cram' else 'rb') as alnfile:
 
-        return get_aln_counts([alnfile] + args[1:])
+        return get_aln_counts([alnfile] + list(args[1:]))
 
 
 def get_cnt_matrix (alnfile, reference_name, alpha='ACGT-'):
