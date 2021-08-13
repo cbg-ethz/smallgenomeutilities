@@ -61,8 +61,12 @@ def parse_args():
         help="Use 0-based (python) instead of 1-based (standard) seq positions"
     )
     parser.add_argument(
-        "-o", "--output", required=False, default=os.path.join(os.getcwd(), 'frameshift_deletions_check.csv'),
-        metavar='CSV', dest='outfile', help="Output file"
+        "-o", "--output", required=False, default=os.path.join(os.getcwd(), 'frameshift_deletions_check.tsv'),
+        metavar='TSV', dest='outfile', help="Output file"
+    )
+    parser.add_argument(
+        "-e", "--english", required=False, default=True, dest='english',
+        help="If True writes english summary diagnosis."
     )
     return parser.parse_args()
 
@@ -269,6 +273,49 @@ def correct_positions(list_dels,list_inserts):
 
     return corrected_insert, corrected_dels
 
+def write_english_summary(df_temp):
+    #' Add summary deletion_diagnosis column to deletion data table
+    indel_position_english =[]
+    deletion_diagnosis =[]
+    for iter, row in df_temp.iterrows():
+        if row['INDEL']=='deletion':
+            indel_pos_temp = 'Gap of '+str(row['length']) + ' nucleotide(s) found at refpos '+str(row['start_position'])
+        elif row['INDEL']=='insertion':
+            indel_pos_temp = 'Insertion of '+str(row['length']) + 'nucleotide(s) starting at refpos '+str(row['start_position'])
+        indel_position_english.append(str(indel_pos_temp))
+
+        if (row['freq_del_fwd'] > 0.5 and row['freq_del_rev'] > 0.5):
+            support_status = "indel supported by majority of fwd and rev reads"
+        elif (row['freq_del_fwd'] > 0.5 and row['reads_rev']== 0) or (row['freq_del_rev'] > 0.5 and row['reads_fwd'] == 0):
+            support_status = "only fwd or rev reads available, indel supported by the majority of them"
+        else:
+            support_status = "indel supported by only one of fwd or rev reads and not the other"
+
+        if row['homopolymeric']==1:
+            homopolymeric_status="homopolymeric"
+        else:
+            homopolymeric_status=""
+
+        if (row['pos_critical_dels'] !=[]) or (row['pos_critical_inserts'] != "[]"):
+            pos_critical_status="neighboring indels may restore reading frame"
+        else:
+            pos_critical_status=""
+
+        if (homopolymeric_status != "" and pos_critical_status != ""):
+            text_row='; '.join([support_status, homopolymeric_status, pos_critical_status])
+        elif (homopolymeric_status != ""):
+            text_row='; '.join([support_status, homopolymeric_status])
+        elif (pos_critical_status != ""):
+            text_row='; '.join([support_status, pos_critical_status])
+        else:
+            text_row='; '.join([support_status])
+
+        deletion_diagnosis.append(text_row)
+
+    df_temp['indel_position_english']=indel_position_english
+    df_temp['indel_diagnosis']=deletion_diagnosis
+    return df_temp
+
 def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_type, gene_list, cons_id='', based=1):
     """
     gather information for current frameshift position.
@@ -406,7 +453,11 @@ def main():
                 continue
             df = df.append(pos_dict, ignore_index=True)
 
-    df.to_csv(args.outfile)
+        if args.english==True:
+            df= write_english_summary(df)
+
+
+    df.to_csv(args.outfile, sep='\t') # write to tsv-file
 
 if __name__ == '__main__':
     main()
