@@ -18,6 +18,16 @@ import sys
 
 
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
 def parse_args():
     """ Set up the parsing of command-line arguments """
 
@@ -37,7 +47,9 @@ def parse_args():
 	[pos_critical_inserts]: Start positions of insertions in the same gene_region that occur in > 40% of reads;
 	[pos_critical_dels]: Start positions of deletions in the same gene_region that occur in > 40% of reads;
 	[homopolymeric]: True if either around the start or end position of the deletion three bases are the same, which may have caused the polymerase to skip during reverse transcription of viral RNA to cDNA, e.g. AATAG;
-	[ref_base]: base in the reference genome""",
+	[ref_base]: base in the reference genome
+	[indel_position_english]: english sentence describing the indel
+	[indel_diagnosis]: english sentence with the indel diagnosis""",
         formatter_class=Formatter)
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
@@ -65,9 +77,12 @@ def parse_args():
         metavar='TSV', dest='outfile', help="Output file"
     )
     parser.add_argument(
-        "-e", "--english", required=False, default=True, dest='english',
+        "-E", "--no-english", dest='english', action='store_false')
+    parser.add_argument(
+        "-e", "--english", required=False, type=str2bool, nargs='?', const=True, dest='english',
         help="If True writes english summary diagnosis."
     )
+    parser.set_defaults(english=True)
     return parser.parse_args()
 
 def check_homopolyeric(variation_info, position, gap_length, indel_type):
@@ -274,16 +289,24 @@ def correct_positions(list_dels,list_inserts):
     return corrected_insert, corrected_dels
 
 def write_english_summary(df_temp):
-    #' Add summary deletion_diagnosis column to deletion data table
+    """
+    Add summary deletion_diagnosis column to deletion data table
+    """
     indel_position_english =[]
     deletion_diagnosis =[]
     for iter, row in df_temp.iterrows():
+        # description of the indels themselves
+        indel_type = None
         if row['INDEL']=='deletion':
-            indel_pos_temp = 'Gap of '+str(row['length']) + ' nucleotide(s) found at refpos '+str(row['start_position'])
+            indel_type = 'Gap'
         elif row['INDEL']=='insertion':
-            indel_pos_temp = 'Insertion of '+str(row['length']) + 'nucleotide(s) starting at refpos '+str(row['start_position'])
+            indel_type = 'Insertion'
+        else:
+            raise ValueError("Bad indel type", row['INDEL'])
+        indel_pos_temp = f"{indel_type} of {row['length']} nucleotide(s) found at refpos {row['start_position']}"
         indel_position_english.append(str(indel_pos_temp))
 
+        # diagnosis of the indel
         if (row['freq_del_fwd'] > 0.5 and row['freq_del_rev'] > 0.5):
             support_status = "indel supported by majority of fwd and rev reads"
         elif (row['freq_del_fwd'] > 0.5 and row['reads_rev']== 0) or (row['freq_del_rev'] > 0.5 and row['reads_fwd'] == 0):
@@ -291,25 +314,10 @@ def write_english_summary(df_temp):
         else:
             support_status = "indel supported by only one of fwd or rev reads and not the other"
 
-        if row['homopolymeric']==1:
-            homopolymeric_status="homopolymeric"
-        else:
-            homopolymeric_status=""
+        homopolymeric_status="homopolymeric" if row['homopolymeric']==1 else None
+        pos_critical_status="neighboring indels may restore reading frame" if (row['pos_critical_dels'] != []) or (row['pos_critical_inserts'] != []) else None
 
-        if (row['pos_critical_dels'] !=[]) or (row['pos_critical_inserts'] != "[]"):
-            pos_critical_status="neighboring indels may restore reading frame"
-        else:
-            pos_critical_status=""
-
-        if (homopolymeric_status != "" and pos_critical_status != ""):
-            text_row='; '.join([support_status, homopolymeric_status, pos_critical_status])
-        elif (homopolymeric_status != ""):
-            text_row='; '.join([support_status, homopolymeric_status])
-        elif (pos_critical_status != ""):
-            text_row='; '.join([support_status, pos_critical_status])
-        else:
-            text_row='; '.join([support_status])
-
+        text_row='; '.join([s for s in [support_status, homopolymeric_status, pos_critical_status] if s])
         deletion_diagnosis.append(text_row)
 
     df_temp['indel_position_english']=indel_position_english
@@ -453,8 +461,9 @@ def main():
                 continue
             df = df.append(pos_dict, ignore_index=True)
 
-        if args.english==True:
-            df= write_english_summary(df)
+    if args.english==True:
+        print("adding english language")
+        df= write_english_summary(df)
 
 
     df.to_csv(args.outfile, sep='\t') # write to tsv-file
