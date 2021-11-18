@@ -363,18 +363,18 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_typ
     reads_rev = variation_info[idx_pos].reads_rev[0]
 
     deletions = variation_info[idx_pos].deletions[0]
-    freq_del = deletions/reads_all*100
+    freq_del = deletions/reads_all
     deletions_fwd = variation_info[idx_pos].deletions_fwd[0]
-    freq_del_fwd = deletions_fwd/reads_fwd*100 if reads_fwd else 0
+    freq_del_fwd = deletions_fwd/reads_fwd if reads_fwd else 0
     deletions_rev = variation_info[idx_pos].deletions_rev[0]
-    freq_del_rev = deletions_rev/reads_rev*100 if reads_rev else 0
+    freq_del_rev = deletions_rev/reads_rev if reads_rev else 0
 
     insertions = variation_info[idx_pos].insertions[0]
-    freq_insert = insertions/reads_all*100
+    freq_insert = insertions/reads_all
     insertions_fwd = variation_info[idx_pos].insertions_fwd[0]
-    freq_insert_fwd = insertions_fwd/reads_fwd*100 if reads_fwd else 0
+    freq_insert_fwd = insertions_fwd/reads_fwd if reads_fwd else 0
     insertions_rev = variation_info[idx_pos].insertions_rev[0]
-    freq_insert_rev = insertions_rev/reads_rev*100 if reads_rev else 0
+    freq_insert_rev = insertions_rev/reads_rev if reads_rev else 0
 
     # NOTE the region of interest covers the position anyway, so we can re-use the whole region stats
     indels_gene_reg = analyse_position.indels_gene_reg
