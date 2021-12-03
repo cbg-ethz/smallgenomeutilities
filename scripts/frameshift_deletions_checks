@@ -316,7 +316,7 @@ def write_english_summary(df_temp):
         elif (row['freq_del_fwd'] >= 0.05 and row['reads_rev']== 0) or (row['freq_del_rev'] >= 0.05 and row['reads_fwd'] == 0):
             support_status = "only fwd or rev reads available, indel supported by the minority of them [5%-50%["
         elif (row['freq_del_fwd'] >= 0.05) or (row['freq_del_rev'] >= 0.05):
-            support_status = "indel supported by minority of fwd or rev reads [5%-50%["
+            support_status = "indel supported by minority of fwd or rev reads [5%-50%]"
         else:
             support_status = " indel not supported (covered by less than 5% of fwd and rev reads)"
 
