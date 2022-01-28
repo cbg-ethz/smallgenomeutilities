@@ -307,18 +307,33 @@ def write_english_summary(df_temp):
         indel_position_english.append(str(indel_pos_temp))
 
          # diagnosis of the indel
-        if (row['freq_del_fwd'] > 0.5 and row['freq_del_rev'] > 0.5):
-            support_status = "indel supported by majority of fwd and rev reads"
-        elif (row['freq_del_fwd'] > 0.5 and row['reads_rev']== 0) or (row['freq_del_rev'] > 0.5 and row['reads_fwd'] == 0):
-            support_status = "only fwd or rev reads available, indel supported by the majority of them"
-        elif (row['freq_del_fwd'] > 0.5) or (row['freq_del_rev'] > 0.5):
-            support_status = "indel supported by majority of fwd or rev reads"
-        elif (row['freq_del_fwd'] >= 0.05 and row['reads_rev']== 0) or (row['freq_del_rev'] >= 0.05 and row['reads_fwd'] == 0):
-            support_status = "only fwd or rev reads available, indel supported by the minority of them [5%-50%["
-        elif (row['freq_del_fwd'] >= 0.05) or (row['freq_del_rev'] >= 0.05):
-            support_status = "indel supported by minority of fwd or rev reads [5%-50%]"
-        else:
-            support_status = " indel not supported (covered by less than 5% of fwd and rev reads)"
+        if indel_type == 'Gap':
+            if (row['freq_del_fwd'] > 0.5 and row['freq_del_rev'] > 0.5):
+                support_status = "indel supported by majority of fwd and rev reads"
+            elif (row['freq_del_fwd'] > 0.5 and row['reads_rev']== 0) or (row['freq_del_rev'] > 0.5 and row['reads_fwd'] == 0):
+                support_status = "only fwd or rev reads available, indel supported by the majority of them"
+            elif (row['freq_del_fwd'] > 0.5) or (row['freq_del_rev'] > 0.5):
+                support_status = "indel supported by majority of fwd or rev reads"
+            elif (row['freq_del_fwd'] >= 0.05 and row['reads_rev']== 0) or (row['freq_del_rev'] >= 0.05 and row['reads_fwd'] == 0):
+                support_status = "only fwd or rev reads available, indel supported by the minority of them [5%-50%["
+            elif (row['freq_del_fwd'] >= 0.05) or (row['freq_del_rev'] >= 0.05):
+                support_status = "indel supported by minority of fwd or rev reads [5%-50%]"
+            else:
+                support_status = "indel not supported (covered by less than 5% of fwd and rev reads)"
+
+        if indel_type == 'Insertion':
+            if (row['freq_insert_fwd'] > 0.5 and row['freq_insert_rev'] > 0.5):
+                support_status = "indel supported by majority of fwd and rev reads"
+            elif (row['freq_insert_fwd'] > 0.5 and row['reads_rev']== 0) or (row['freq_insert_rev'] > 0.5 and row['reads_fwd'] == 0):
+                support_status = "only fwd or rev reads available, indel supported by the majority of them"
+            elif (row['freq_insert_fwd'] > 0.5) or (row['freq_insert_rev'] > 0.5):
+                support_status = "indel supported by majority of fwd or rev reads"
+            elif (row['freq_insert_fwd'] >= 0.05 and row['reads_rev']== 0) or (row['freq_insert_rev'] >= 0.05 and row['reads_fwd'] == 0):
+                support_status = "only fwd or rev reads available, indel supported by the minority of them [5%-50%["
+            elif (row['freq_insert_fwd'] >= 0.05) or (row['freq_insert_rev'] >= 0.05):
+                support_status = "indel supported by minority of fwd or rev reads [5%-50%]"
+            else:
+                support_status = "indel not supported (covered by less than 5% of fwd and rev reads)"
 
         homopolymeric_status="homopolymeric" if row['homopolymeric']==1 else None
         pos_critical_status="neighboring indels may restore reading frame" if (row['pos_critical_dels'] != []) or (row['pos_critical_inserts'] != []) else None
