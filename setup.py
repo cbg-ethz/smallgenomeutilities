@@ -15,7 +15,7 @@ def readme():
 
 setup(
     name="smallgenomeutilities",
-    version="0.3.5",
+    version="0.3.6",
     author="David Seifert, Susana Posada Cespedes, Ivan Topolsky, Lara Fuhrmann",
     author_email="david.seifert@bsse.ethz.ch, susana.posada@bsse.ethz.ch, ivan.topolsky@bsse.ethz.ch, lara.fuhrmann@bsse.ethz.ch",
     description=(
@@ -69,5 +69,6 @@ setup(
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
     ]
 )
