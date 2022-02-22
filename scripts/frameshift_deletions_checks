@@ -213,8 +213,8 @@ def align(reference, consensus):
         (will appear as deletions *in the reference*)
     """
 
-
     all_align=[]
+    align_casepreserved=[]
 
     # Loop through pairs to avoid MAFFT aligning different unrelated segments
     for seq_record, ref_record in zip(SeqIO.parse(consensus, "fasta"), SeqIO.parse(reference, "fasta")):
@@ -247,6 +247,18 @@ def align(reference, consensus):
                 print(mafft_cline, ":", file=sys.stderr)
                 print(stderr, file=sys.stderr)
             all_align += AlignIO.read(StringIO(stdout), "fasta")
+
+        # We need to save the aligned consensus, but we need to preserve the nucleotide letter case
+        # Workaround: tempfiles are not visibile by os.system, BUT --preservecase is not implemented in MafftCommandline. Working with an explicit temp file saved in folder
+        with open ("tmp.fasta", "w") as f:
+            SeqIO.write(data, f, "fasta")
+        os.system("mafft --preservecase tmp.fasta 1> temp_out.fasta")
+        align_casepreserved += AlignIO.read("temp_out.fasta", "fasta")
+        os.system("rm tmp.fasta temp_out.fasta")
+
+    # Write the aligned fasta consensus to disk in the same position as the original unaligned input consensus
+    # all_align will always have the structure: [reference, seq, ...], so we need to slice only the elements at odd indexes
+    SeqIO.write(align_casepreserved[1::2], consensus.replace(".fasta", "_aligned.fasta"), "fasta")
 
     return all_align
 # static re: only compile it once
