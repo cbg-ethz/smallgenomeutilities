@@ -249,12 +249,15 @@ def align(reference, consensus):
             all_align += AlignIO.read(StringIO(stdout), "fasta")
 
         # We need to save the aligned consensus, but we need to preserve the nucleotide letter case
-        # Workaround: tempfiles are not visibile by os.system, BUT --preservecase is not implemented in MafftCommandline. Working with an explicit temp file saved in folder
-        with open ("tmp.fasta", "w") as f:
-            SeqIO.write(data, f, "fasta")
-        os.system("mafft --preservecase tmp.fasta 1> temp_out.fasta")
-        align_casepreserved += AlignIO.read("temp_out.fasta", "fasta")
-        os.system("rm tmp.fasta temp_out.fasta")
+        # In order to preserve the possible case-sensitivity of downstream steps, the consensus is saved by running MAFFT one more time
+        with tempfile.NamedTemporaryFile() as tmp:
+            with open(tmp.name, 'w') as f:
+                SeqIO.write(data, tmp.name, "fasta")
+                f.seek(0)
+            with tempfile.NamedTemporaryFile() as tmp2:
+                with open(tmp2.name, 'w') as f2:
+                    os.system("mafft --preservecase " + tmp.name + " 1> " + tmp2.name)
+                align_casepreserved += AlignIO.read(tmp2.name, "fasta")
 
     # Write the aligned fasta consensus to disk in the same position as the original unaligned input consensus
     # all_align will always have the structure: [reference, seq, ...], so we need to slice only the elements at odd indexes
