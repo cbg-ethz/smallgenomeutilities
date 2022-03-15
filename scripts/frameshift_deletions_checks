@@ -68,6 +68,9 @@ def parse_args():
         "-g", "--genes", required=True, metavar='GFF', dest='genes_gff', type=str,
         help="GFF file listing genes positions on the reference sequence"
     )
+    requiredNamed.add_argument(
+        "-O", "--orf1ab", required=True, dest='orf1ab', type=str,
+        help="CDS ID for the full Orf1ab CDS, comprising the ribosomal shift. In the GFF this CDS should consist of 2 entries with the same CDS ID due to the parital overlap caused by the ribosomal shift at translation time"
     parser.add_argument(
         "-0", "--zero-based", required=False, dest='based', action='store_const', const=0, default=1,
         help="Use 0-based (python) instead of 1-based (standard) seq positions"
@@ -111,13 +114,21 @@ def check_homopolyeric(variation_info, position, gap_length, indel_type):
 
     return 0
 
-def parse_gff(genes_gff):
+def parse_gff(genes_gff, featuretype):
     """
     Return a gene_list suitable for get_gene_at_position
     """
     if genes_gff:
         with open(genes_gff) as gf:
-            return [ (record.id, int(feature.location.start), int(feature.location.end), feature.qualifiers.get('Name', [feature.id])[0]) for record in GFF.parse(gf) for feature in record.features if feature.type == 'gene' ]
+            if featuretype in ['gene', 'Gene', 'GENE']:
+                return [ (record.id, int(feature.location.start), int(feature.location.end), feature.qualifiers.get('Name', [feature.id])[0]) for record in GFF.parse(gf) for feature in record.features if feature.type == 'gene' ]
+            elif featuretype in ['cds', "CDS"]:
+                genes = [feature for record in GFF.parse(gf) for feature in record.features if feature.type == 'gene' ]
+                #for gene in genes:
+                #cds_list.extend(gene.sub_features)
+                return [genes]
+            else:
+                sys.exit("Unrecognized featuretype for parsing GFF. Accepted values are 'gene' and 'CDS'")
     return None
 
 def get_gene_at_position(gene_list, ref_id, position):
@@ -149,6 +160,7 @@ def check_indels_gene_region(gene_reg_load_variation, curr_pos, gap_length, inde
     reads_all = gene_reg_load_variation.reads_all[i_start:i_end]
     inserts= gene_reg_load_variation.insertions[i_start:i_end]
     dels= gene_reg_load_variation.deletions[i_start:i_end]
+    stops= ps[i_start:i_end]
 
     # NOTE When looking for an insert:
     # - we will not list the insert *itself*
@@ -156,8 +168,8 @@ def check_indels_gene_region(gene_reg_load_variation, curr_pos, gap_length, inde
     # And vice-versa for deletions.
     critical_inserts = [indel_pos[i]+based for i,x in enumerate(inserts) if (x > 0.4*reads_all[i]) and (indel_type=='deletion' or indel_pos[i]!=curr_pos)]
     critical_dels = [indel_pos[i]+based for i,x in enumerate(dels) if (x > 0.4*reads_all[i]) and ((indel_type=='insertion') or (indel_pos[i] not in range(curr_pos, curr_pos+gap_length)))]
-
-    return critical_inserts, critical_dels
+    critical_stops = [indel_pos[i]+based for i,x in enumerate(stops) if (x > 0.4*reads_all[i]) and ((indel_type=='stoploss') or (indel_type=='stopgain') or indel_pos[i]!=curr_pos)]
+    return critical_inserts, critical_dels, critical_stops
 
 def ranges(nums):
     """
@@ -203,6 +215,131 @@ def list_all_dels(aligned_seqs):
             pos_length_list.append([item_range[0],len_del(item_range),reference_seq.id, consensus_seq.id, 'deletion'])
 
     return pos_length_list
+
+def extract_cds_range(cds_list):
+    cds_positions = []
+    for gene in cds_list:
+        for cds in gene.sub_features:
+            cds_positions.append([gene.id, cds.id, cds.location.start.position, cds.location.end.position])
+    return cds_positions
+
+def correct_cds_positions(cds_positions, list_inserts):
+    # Move from reference space (CDS position in the GFF) to sequence space. Upstream inserts shift the start and end forward. Inserts inside the CDS shift only the end. Deletions do not shift as they are just positions that are substituted with "-"
+    for count, insert in enumerate(list_inserts):
+        for cds in cds_positions:
+            if insert[0] <= cds[2]:
+                cds[2] += insert[1]
+                cds[3] += insert[1]
+            if insert[0] > cds[2] and insert[0] <= cds[3]:
+                cds[3] += insert[1]
+    return cds_positions
+
+def list_all_stops(aligned_seqs, cds_positions, orf1ab_name):
+    '''
+    returns list with starting position of _all_ stop codons for each CDS. The script also takes into account if there are no new stops and the expected stop is lost (stop-loss)
+    The function has an exception for Orf1ab full CDS: Because of the gene being translated with a ribosome shift, there is a 1-nucleotide overlap between the region before and after the shift. This results in 2 separate CDS entries with identical gene- and CDS-ID. The exception identifies the two entries nd merges their nucleotide sequences together before translation
+    '''
+    stop_list = []
+    orf1ab_processed = False
+    for cds in cds_positions:
+       stoptype = "stopgain"
+       if cds[1] == orf1ab_name:
+            if orf1ab_processed:
+                continue
+            orf1ab_positions = [ cds for cds in cds_positions if cds[1] == orf1ab_name ]
+            if len(orf1ab_positions) == 2:
+                # Store the number of deletions within the CDS, as they will shift the relative position after the ungap
+                orf1ab_sequence = aligned_seqs[1][orf1ab_positions[0][2]:orf1ab_positions[0][3]].seq
+                cds_sequence = orf1ab_sequence + aligned_seqs[1][orf1ab_positions[1][2]:orf1ab_positions[1][3]].seq
+                #cds_del_number = cds_sequence.count("-")
+                cds_sequence = cds_sequence.ungap("-")
+                orf1ab_processed = True
+            else:
+                sys.exit("Orf1ab full CDS is expected to have exactly 2 separate entries. Found " + str(len(orf1ab_positions)) + " entries matching CDS ID " + orf1ab_name + ". Please check you GFF and the provided CDS ID")
+       else:
+           #Remove the deletions from the CDS region before translating
+           cds_sequence = aligned_seqs[1][cds[2]:cds[3]].seq
+           cds_del_number = cds_sequence.count("-")
+           cds_sequence = cds_sequence.ungap("-")
+       translated_cds = cds_sequence.translate()
+       # We are interested in the all stops we find. If it's before the last codon, it's a stopgain. If there is no stop codon at all, it's a stoploss
+       stop_found = re.finditer("\*", str(translated_cds))
+       stop_positions = [ m.start() for m in stop_found ]
+       if len(stop_positions) == 0:
+           potential_stoploss_seq = cds_sequence[len(cds_sequence)-3:len(cds_sequence)]
+           if potential_stoploss_seq.find("n") == -1:
+               stoptype = "stoploss"
+               stop_pos_aa = [ len(translated_cds) ]
+           else:
+               # Ignore stoplosses that are detected because of n in the sequence
+               stoptyp = "n_stoploss"
+               stop_pos_aa = [ len(translated_cds) ]
+       else:
+           # The positions in stop_positions are 0 based because they are positions in a python string. Converting back immediately to 1 based. No need to do that for the stoplosses because they are bound to the length of the string, not to the position
+           stop_pos_aa = [ sp+1 for sp in stop_positions ]
+           if stop_pos_aa[-1] == len(translated_cds):
+               stop_pos_aa.pop()
+       stop_rel_pos_nt = [ (sp*3)-2 for sp in stop_pos_aa ]
+       # The ribosome shifts makes it so the position after the shift is +1 the actual position on the reference. Shift back if the cds is orf1ab and the position is after the start of the second part of the CDS 
+       stop_abs_pos_nt = [ cds[2]+sp for sp in stop_rel_pos_nt ]
+       stop_abs_pos_nt = correct_stop_abs_pos(stop_abs_pos_nt, aligned_seqs, cds[2])
+       if cds[1] == orf1ab_name:
+           stop_abs_pos_nt_corrected = []
+           for stop in stop_abs_pos_nt:
+               if stop > orf1ab_positions[1][2]:
+                   stop_abs_pos_nt_corrected.append(stop-1)
+               else:
+                   stop_abs_pos_nt_corrected.append(stop)
+           stop_abs_pos_nt = stop_abs_pos_nt_corrected
+       # Report one stop per element for compatibility with the downstream functions. Differentiate between stopgain and stoploss. Remember to remove the expected stop at the end of the CDS if it exists
+       for i in range(0, len(stop_pos_aa)):
+           if stoptype != "n_stoploss":
+               stop_list.append([ stop_abs_pos_nt[i], 3, aligned_seqs[0].id, aligned_seqs[1].id, stoptype, cds[0], cds[1], stop_pos_aa[i] ])
+    return stop_list
+           
+def correct_stop_abs_pos(stop_abs_pos_nt, aligned_seqs, cds_start):
+    '''
+    If a stop is in a CDS that has deletions in the sequence, the relative positions are shifted by that many nucleotides by the ungapping if the deletion appears before the stop codon. When we move to absolute positions, we still need to correct for the deletions, because it's a missing information not yet evaluated. 
+    '''
+    for position,stop in enumerate(stop_abs_pos_nt):
+        del_num = 0
+        converged = False
+        failsafe = 0
+        while not converged:
+            preceding_cds = aligned_seqs[1][cds_start:stop+del_num].seq
+            #print(str(preceding_cds))
+            previous_del_num = del_num
+            #print("prev " + str(previous_del_num))
+            del_num = preceding_cds.count("-")
+            #print("del num "+str(del_num))
+            if previous_del_num == del_num:
+                converged = True
+            failsafe = failsafe + 1
+            if failsafe > 1000000:
+                sys.exit("Possible infinite loop in function: Execution interrupted as failsafe")
+        stop_abs_pos_nt[position] = stop + del_num
+        #print("DEBUG: found " + str(del_num) + " deletions. Shifted stop from " +str(stop) + " to "+ str(stop_abs_pos_nt[position]))
+    return stop_abs_pos_nt
+
+def find_indels_in_stops(list_stops, list_dels, list_inserts):
+    # Stops with indel within the codon are reported alongside the indel itself and therefore must be flagged
+    # We need to check if the range of the indel stretch falls in the range of 3 nucleotide from the start position of the stop
+    for stop in list_stops:
+        overlapping_del = False
+        overlapping_ins = False
+        stop_range = range(stop[0], stop[0]+stop[1]+1)
+        for deletion in list_dels:
+            del_range = range(deletion[0], deletion[0]+deletion[1]+1)
+            if len(set(stop_range).intersection(del_range)) != 0:
+                overlapping_del = True
+        for ins in list_inserts:
+            ins_range = range(ins[0], ins[0]+ins[1]+1)
+            if len(set(stop_range).intersection(ins_range)) != 0:
+                overlapping_ins = True
+        stop.append(overlapping_del)
+        stop.append(overlapping_ins)
+    return list_stops
+            
 
 def align(reference, consensus):
     """
@@ -279,7 +416,7 @@ def check_dels_gene_region(frameshift_deletions, region_start, region_end, posit
 
     return critical_pos
 
-def correct_positions(list_dels,list_inserts):
+def correct_positions(list_dels,list_inserts, list_stops):
     '''
     Insertions shift the positions --> shift back to reference seq space
     Correct to zero-based (we need this for pysamstats).
@@ -289,19 +426,26 @@ def correct_positions(list_dels,list_inserts):
         for deletion in list_dels:
             if deletion[0] > insert[0]:
                 deletion[0]-=insert[1]
+    # shift stops due to insertions and deletions occuring before. Shift to zero-based space
+    for count, insert in enumerate(list_inserts):
+        for j in range(len(list_stops)):
+            cds_stops_corrected = []
+            if list_stops[j][0] > insert[0]:
+                list_stops[j][0] = list_stops[j][0] - insert[1] -1
+            else:
+                list_stops[j][0] = list_stops[j][0] -1
     # shift insertions due to insertions occuring before
     for count, insert in enumerate(list_inserts):
         for j in range(count+1, len(list_inserts)):
             if list_inserts[j][0] > insert[0]:
                 list_inserts[j][0]-=insert[1]
-    # shift inseritions to zero-based space
+    # shift insertions to zero-based space
     for j in range(len(list_inserts)):
         list_inserts[j][0]-=1
-
     corrected_insert = list_inserts
-    corrected_dels =list_dels
-
-    return corrected_insert, corrected_dels
+    corrected_dels = list_dels
+    corrected_stops = list_stops
+    return corrected_insert, corrected_dels, corrected_stops
 
 def write_english_summary(df_temp):
     """
@@ -357,7 +501,7 @@ def write_english_summary(df_temp):
     df_temp['indel_diagnosis']=deletion_diagnosis
     return df_temp
 
-def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_type, gene_list, cons_id='', based=1):
+def analyse_position(bamfile, reference, ref_id, position, aa_position, gap_length, indel_type, gene_list, cons_id='', based=1):
     """
     gather information for current frameshift position.
     """
@@ -368,6 +512,7 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_typ
     if (analyse_position.ref_id == ref_id and analyse_position.region_start==region_start and analyse_position.region_end==region_end):
         # cache hit! no need to reparse the BAM file!
         variation_info = analyse_position.indels_gene_reg
+        coverage_info = analyse_position.coverage_gene_reg
     else:
         analyse_position.indels_gene_reg = variation_info = pysamstats.load_variation_strand(bamfile, fafile=reference,
                                      chrom=ref_id,
@@ -403,9 +548,24 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_typ
     insertions_rev = variation_info[idx_pos].insertions_rev[0]
     freq_insert_rev = insertions_rev/reads_rev if reads_rev else 0
 
+    stops = 0
+    freq_stop = 0
+    stops_fwd = 0
+    freq_stop_fwd = 0
+    stops_rev = 0
+    freq_stop_rev = 0
+
+    if indel_type is "stopgain" or indel_type is "stoploss":
+        stops_fwd = variation_info[idx_pos].T_fwd[0]
+        freq_stop_fwd = stops_fwd/reads_fwd if reads_fwd else 0
+        stops_rev = variation_info[idx_pos].T_rev[0]
+        freq_stop_rev = stops_rev/reads_rev if reads_rev else 0
+        stops = stops_fwd + stops_rev
+        freq_stop = stops/reads_all
+
     # NOTE the region of interest covers the position anyway, so we can re-use the whole region stats
     indels_gene_reg = analyse_position.indels_gene_reg
-    critical_inserts, critical_dels= check_indels_gene_region(indels_gene_reg,position, gap_length, indel_type,
+    critical_inserts, critical_dels, critical_stops= check_indels_gene_region(indels_gene_reg,position, gap_length, indel_type,
                                                     region_start, region_end, based)
 
     homopolyeric = check_homopolyeric(variation_info, position, gap_length, indel_type)
@@ -413,7 +573,7 @@ def analyse_position(bamfile, reference, ref_id, position, gap_length, indel_typ
     dict = {'ref_id': ref_id,
             'start_position': position+based,
             'length': gap_length,
-            'INDEL': indel_type,
+            'VARIANT': indel_type,
             'gene_region':gene_region[3],
             'reads_all': reads_all,
             'reads_fwd': reads_fwd,
@@ -451,9 +611,11 @@ def main():
     bamfile = args.bamfile	    # e.g.: 'REF_aln_410130_171220eg29_H5.bam'
     reference = args.reference	# e.g.: '../references/NC_045512.2.fasta'
     consensus = args.ref_majority_dels	# e.g.: 'ref_majority_dels.fasta'
-
-    gene_list = parse_gff(args.genes_gff) # e.g.: 'Genes_NC_045512.2.GFF3'
-
+    orf1ab_name = "cds-YP_009724389.1"
+    
+    gene_list = parse_gff(args.genes_gff, featuretype='gene') # e.g.: 'Genes_NC_045512.2.GFF3'
+    cds_list = parse_gff(args.genes_gff, featuretype='CDS')
+    
     df = pd.DataFrame(columns=('ref_id','start_position','length','INDEL','gene_region',
                                 'reads_all','reads_fwd','reads_rev',
                                 'deletions','freq_del','freq_del_fwd','freq_del_rev',
@@ -473,21 +635,29 @@ def main():
     else:
         align_dels= list_all_dels(align_seqs)
         align_inserts= list_all_inserts(align_seqs)
-
+        cds_positions = extract_cds_range(cds_list)
+        cds_positions = correct_cds_positions(cds_positions, align_inserts)
+        align_stops = list_all_stops(align_seqs, cds_positions, orf1ab_name)
+        
         # convert coordinate from pair-alignment space to reference-space
-        corrected_insert, corrected_dels = correct_positions(align_dels,align_inserts)
+        corrected_insert, corrected_dels, corrected_stops = correct_positions(align_dels,align_inserts, align_stops)
+        
+        align_stops = find_indels_in_stops(list_stops, list_dels, list_inserts)
 
         # sort by ref_id, then by position to optimize cache hits in analyse_position
-        for pos in sorted(corrected_dels+corrected_insert, key=operator.itemgetter(2,0)):
+        for pos in sorted(corrected_dels+corrected_insert+corrected_stops, key=operator.itemgetter(2,0)):
             ref_id = pos[2]
             position = int(pos[0])
             gap_length = int(pos[1])
             cons_id = pos[3]
             indel_type = pos[4]
-            if gap_length%3==0:
+            aa_position = None
+            if indel_type is "stopgain" or indel_type is "stoploss":
+                aa_position = pos[7]
+            if gap_length%3==0 and indel_type is not "stopgain":
                 # only frameshift insertions , i.e. insert lenght not dividible by 3
                 continue
-            pos_dict = analyse_position(bamfile, reference, ref_id, position, gap_length,indel_type,
+            pos_dict = analyse_position(bamfile, reference, ref_id, position, aa_position, gap_length,indel_type,
                                         gene_list,cons_id, based=args.based)
             if (len(pos_dict)==0):
                 # skip when no information extracted
