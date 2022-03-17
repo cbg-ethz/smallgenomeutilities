@@ -50,6 +50,7 @@ def parse_args():
 	[ref_base]: base in the reference genome
 	[indel_position_english]: english sentence describing the indel
 	[indel_diagnosis]: english sentence with the indel diagnosis""",
+        [orf1ab]: CDS ID for the full Orf1ab CDS, comprising the ribosomal shift. In the GFF this CDS should consist of 2 entries with the same CDS ID due to the parital overlap caused by the ribosomal shift at translation time;
         formatter_class=Formatter)
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
@@ -69,7 +70,7 @@ def parse_args():
         help="GFF file listing genes positions on the reference sequence"
     )
     requiredNamed.add_argument(
-        "-O", "--orf1ab", required=True, dest='orf1ab', type=str,
+        "-O", "--orf1ab", required=True, dest='orf1ab', type=str, default = 'cds-YP_009724389.1'
         help="CDS ID for the full Orf1ab CDS, comprising the ribosomal shift. In the GFF this CDS should consist of 2 entries with the same CDS ID due to the parital overlap caused by the ribosomal shift at translation time"
     parser.add_argument(
         "-0", "--zero-based", required=False, dest='based', action='store_const', const=0, default=1,
@@ -88,9 +89,9 @@ def parse_args():
     parser.set_defaults(english=True)
     return parser.parse_args()
 
-def check_homopolyeric(variation_info, position, gap_length, indel_type):
+def check_homopolymeric(variation_info, position, gap_length, indel_type):
     '''
-    return homopolyeric == True if either around the start_position or the end_position
+    return homopolmyeric == True if either around the start_position or the end_position
     between the two neighbors 3 are of the same base, eg. AATAG
     '''
 
@@ -103,7 +104,7 @@ def check_homopolyeric(variation_info, position, gap_length, indel_type):
         idx_pos = np.where(np.logical_and(variation_info.pos>=p-2, variation_info.pos<=p+2))[0]
         if idx_pos.size==0:
             # really broken alignment
-            print(f"Warning no reads around {ref_id}:{position-2}:{position+2} for homopolyeric ?!", file=sys.stderr)
+            print(f"Warning no reads around {ref_id}:{position-2}:{position+2} for homopolymeric ?!", file=sys.stderr)
             continue
 
         # count all the listed
@@ -126,7 +127,7 @@ def parse_gff(genes_gff, featuretype):
                 genes = [feature for record in GFF.parse(gf) for feature in record.features if feature.type == 'gene' ]
                 #for gene in genes:
                 #cds_list.extend(gene.sub_features)
-                return [genes]
+                return genes
             else:
                 sys.exit("Unrecognized featuretype for parsing GFF. Accepted values are 'gene' and 'CDS'")
     return None
@@ -160,7 +161,6 @@ def check_indels_gene_region(gene_reg_load_variation, curr_pos, gap_length, inde
     reads_all = gene_reg_load_variation.reads_all[i_start:i_end]
     inserts= gene_reg_load_variation.insertions[i_start:i_end]
     dels= gene_reg_load_variation.deletions[i_start:i_end]
-    stops= ps[i_start:i_end]
 
     # NOTE When looking for an insert:
     # - we will not list the insert *itself*
@@ -168,8 +168,7 @@ def check_indels_gene_region(gene_reg_load_variation, curr_pos, gap_length, inde
     # And vice-versa for deletions.
     critical_inserts = [indel_pos[i]+based for i,x in enumerate(inserts) if (x > 0.4*reads_all[i]) and (indel_type=='deletion' or indel_pos[i]!=curr_pos)]
     critical_dels = [indel_pos[i]+based for i,x in enumerate(dels) if (x > 0.4*reads_all[i]) and ((indel_type=='insertion') or (indel_pos[i] not in range(curr_pos, curr_pos+gap_length)))]
-    critical_stops = [indel_pos[i]+based for i,x in enumerate(stops) if (x > 0.4*reads_all[i]) and ((indel_type=='stoploss') or (indel_type=='stopgain') or indel_pos[i]!=curr_pos)]
-    return critical_inserts, critical_dels, critical_stops
+    return critical_inserts, critical_dels
 
 def ranges(nums):
     """
@@ -238,6 +237,8 @@ def list_all_stops(aligned_seqs, cds_positions, orf1ab_name):
     '''
     returns list with starting position of _all_ stop codons for each CDS. The script also takes into account if there are no new stops and the expected stop is lost (stop-loss)
     The function has an exception for Orf1ab full CDS: Because of the gene being translated with a ribosome shift, there is a 1-nucleotide overlap between the region before and after the shift. This results in 2 separate CDS entries with identical gene- and CDS-ID. The exception identifies the two entries nd merges their nucleotide sequences together before translation
+    The list of stops has the following structure: [ start, length, ref_id, id, variant_type, gene_id, cds_id, aminoacid_position, mismatches, first_nucleotide]
+    More specifically: variant_type can be either "stopgain", "stoploss"; first_nucleotide is used only for stoplosses, it stores first nucleotide of the codon and it is used to retrieve the coverage of the actual nucleotide in the consensus, even in case of mixed coverage
     '''
     stop_list = []
     orf1ab_processed = False
@@ -272,8 +273,7 @@ def list_all_stops(aligned_seqs, cds_positions, orf1ab_name):
                stop_pos_aa = [ len(translated_cds) ]
            else:
                # Ignore stoplosses that are detected because of n in the sequence
-               stoptyp = "n_stoploss"
-               stop_pos_aa = [ len(translated_cds) ]
+               continue
        else:
            # The positions in stop_positions are 0 based because they are positions in a python string. Converting back immediately to 1 based. No need to do that for the stoplosses because they are bound to the length of the string, not to the position
            stop_pos_aa = [ sp+1 for sp in stop_positions ]
@@ -292,9 +292,14 @@ def list_all_stops(aligned_seqs, cds_positions, orf1ab_name):
                    stop_abs_pos_nt_corrected.append(stop)
            stop_abs_pos_nt = stop_abs_pos_nt_corrected
        # Report one stop per element for compatibility with the downstream functions. Differentiate between stopgain and stoploss. Remember to remove the expected stop at the end of the CDS if it exists
+       # at this point check if the position has any mismatches with the reference
        for i in range(0, len(stop_pos_aa)):
-           if stoptype != "n_stoploss":
-               stop_list.append([ stop_abs_pos_nt[i], 3, aligned_seqs[0].id, aligned_seqs[1].id, stoptype, cds[0], cds[1], stop_pos_aa[i] ])
+           mismatches = find_mismatches_in_stops(aligned_seqs, stop_abs_pos_nt[i])
+           if stoptype == "stoploss":
+               stoploss_nt = aligned_seqs[1][stop_abs_pos_nt[i]-1]
+           else:
+               stoploss_nt = "None"
+           stop_list.append([ stop_abs_pos_nt[i], 3, aligned_seqs[0].id, aligned_seqs[1].id, stoptype, cds[0], cds[1], stop_pos_aa[i], mismatches, stoploss_nt ])
     return stop_list
            
 def correct_stop_abs_pos(stop_abs_pos_nt, aligned_seqs, cds_start):
@@ -321,24 +326,65 @@ def correct_stop_abs_pos(stop_abs_pos_nt, aligned_seqs, cds_start):
         #print("DEBUG: found " + str(del_num) + " deletions. Shifted stop from " +str(stop) + " to "+ str(stop_abs_pos_nt[position]))
     return stop_abs_pos_nt
 
+def find_mismatches_in_stops(aligned_seqs, consensus_space_pos):
+    position_0based = consensus_space_pos - 1
+    evaluated_pos = 0
+    mismatches = 0
+    while evaluated_pos < 3:
+        ref_nt = aligned_seqs[0][position_0based]
+        cons_nt = aligned_seqs[1][position_0based]
+        if cons_nt == "-":
+            continue
+        if ref_nt != cons_nt:
+            if ref_nt != "-":
+                mismatches = mismatches + 1
+        evaluated_pos = evaluated_pos + 1
+    return mismatches
+
 def find_indels_in_stops(list_stops, list_dels, list_inserts):
     # Stops with indel within the codon are reported alongside the indel itself and therefore must be flagged
     # We need to check if the range of the indel stretch falls in the range of 3 nucleotide from the start position of the stop
-    for stop in list_stops:
-        overlapping_del = False
-        overlapping_ins = False
+    # There can be up to 2 non-contiguous insertions or deletions in the codon, therefore we need to check all
+    # E.g. _ _ _T-A-A_ _ _
+    # The only exception is if the indel has length multiple of 3: in this case it's going to not be reported, therefore the stopgain still needs to stay standalone
+    overlap_found = []
+    for i,stop in enumerate(list_stops):
         stop_range = range(stop[0], stop[0]+stop[1]+1)
         for deletion in list_dels:
             del_range = range(deletion[0], deletion[0]+deletion[1]+1)
-            if len(set(stop_range).intersection(del_range)) != 0:
-                overlapping_del = True
+            if len(set(stop_range).intersection(del_range)) != 0 and deletion[1]%3!=0:
+                deletion.append(stop[7])
+                deletion.append(stop[8])
+                deletion.append(stop[9])
+                overlap_found.append(i)
         for ins in list_inserts:
             ins_range = range(ins[0], ins[0]+ins[1]+1)
-            if len(set(stop_range).intersection(ins_range)) != 0:
-                overlapping_ins = True
-        stop.append(overlapping_del)
-        stop.append(overlapping_ins)
-    return list_stops
+            if len(set(stop_range).intersection(ins_range)) != 0 and ins[1]%3!=0:
+                ins.append(stop[7])
+                ins.append(stop[8])
+                ins.append(stop[9])
+                overlap_found.append(i)
+    for deletion in list_dels:
+        if len(deletion) == 5:
+            deletion.append("None")
+            deletion.append(0)
+            deletion.append("None")
+        if len(deletion) != 5 and len(deletion) != 8:
+            print("ERROR: invalid deletion length")
+    for ins in list_inserts:
+        if len(ins) == 5:
+            ins.append("None")
+            ins.append(0)
+            ins.append("None")
+        if len(ins) != 5 and len(ins) != 8:
+            print("ERROR: invalid insertion length")
+    if len(overlap_found) == 1:
+        overlap_found = operator.itemgetter(*set(overlap_found))(list_stops)
+        list_stops.remove(overlap_found)
+    elif len(overlap_found != 0):
+        for i in overlap_found:
+            list_stops.remove(i)
+    return list_stops, list_dels, list_inserts
             
 
 def align(reference, consensus):
@@ -449,34 +495,60 @@ def correct_positions(list_dels,list_inserts, list_stops):
 
 def write_english_summary(df_temp):
     """
-    Add summary deletion_diagnosis column to deletion data table
+    Add summary variant_diagnosis column to deletion data table
     """
-    indel_position_english =[]
-    deletion_diagnosis =[]
+    variant_position_english =[]
+    variant_diagnosis =[]
     for iter, row in df_temp.iterrows():
         # description of the indels themselves
-        indel_type = None
-        if row['INDEL']=='deletion':
-            indel_type = 'Gap'
-        elif row['INDEL']=='insertion':
-            indel_type = 'Insertion'
+        variant_type = None
+        if row['VARIANT']=='deletion':
+            variant_type = 'Gap'
+            variant_pos_temp = f"{variant_type} of {row['length']} nucleotide(s) found at refpos {row['start_position']}"
+            if row['aa_position'] != "None":
+                variant_pos_temp = variant_pos_temp + f", causing an early stop codon at aminoacid position {row['aa_position']}"
+            if row['stoploss_nt'] != "None":
+                variant_pos_temp = variant_pos_temp + ", causing a stoploss" 
+        elif row['VARIANT']=='insertion':
+            variant_type = 'Insertion'
+            variant_pos_temp = f"{variant_type} of {row['length']} nucleotide(s) found at refpos {row['start_position']}"
+            if row['aa_position'] != "None":
+                variant_pos_temp = variant_pos_temp + f", causing an early stop codon at aminoacid position {row['aa_position']}"
+            if row['stoploss_nt'] != "None":
+                variant_pos_temp = variant_pos_temp + ", causing a stoploss" 
+        elif row['VARIANT']=='stopgain':
+            variant_type = 'Stopgain'
+            variant_pos_temp = f"Early Stopgain found at refpos {row['start_position']}, aminoacid position {row['aa_position']}"
+        elif row['VARIANT']=='stoploss':
+            variant_type = 'Stoploss'
+            variant_pos_temp = f"{variant_type} found at refpos {row['start_position']}"
         else:
-            raise ValueError("Bad indel type", row['INDEL'])
-        indel_pos_temp = f"{indel_type} of {row['length']} nucleotide(s) found at refpos {row['start_position']}"
-        indel_position_english.append(str(indel_pos_temp))
+            raise ValueError("Bad variant type", row['VARIANT'])
+        if row['stop_mismatches'] > 0:
+            variant_pos_temp = variant_pos_temp + f", with {row['stop_mismatches']} mismatches"
+        variant_position_english.append(str(variant_pos_temp))
 
-         # diagnosis of the indel
-        if indel_type == 'Gap':
+
+         # diagnosis of the variant
+        if variant_type == 'Gap':
             name = 'deletion'
             fwdc = row['freq_del_fwd']
             revc = row['freq_del_rev']
-        elif indel_type == 'Insertion':
+        elif variant_type == 'Insertion':
             name = 'insertion'
             fwdc = row['freq_insert_fwd']
             revc = row['freq_insert_rev']
+        elif variant_type == 'Stopgain':
+            name = 'stopgain'
+            fwdc = row['freq_stop_fwd']
+            revc = row['freq_stop_rev']
+        elif variant_type == 'Stoploss':
+            name = 'stoploss'
+            fwdc = row['freq_stop_fwd']
+            revc = row['freq_stop_rev']
         else:
             # Throw some 'internal error' exception
-            raise ValueError("Bad indel type", row['INDEL'])
+            raise ValueError("Bad variant type", row['VARIANT'])
 
         if (fwdc > 0.5 and revc > 0.5):
             support_status = f"{name} supported by majority of fwd and rev reads"
@@ -485,7 +557,7 @@ def write_english_summary(df_temp):
         elif (fwdc > 0.5) or (revc > 0.5):
             support_status = f"{name} supported by majority of fwd or rev reads"
         elif (fwdc >= 0.05 and row['reads_rev']== 0) or (revc >= 0.05 and row['reads_fwd'] == 0):
-            support_status = f"only fwd or rev reads available, {name} supported by the minority of them [5%-50%["
+            support_status = f"only fwd or rev reads available, {name} supported by the minority of them [5%-50%]"
         elif (fwdc >= 0.05) or (revc >= 0.05):
             support_status = f"{name} supported by minority of fwd or rev reads [5%-50%]"
         else:
@@ -495,13 +567,16 @@ def write_english_summary(df_temp):
         pos_critical_status="neighboring indels may restore reading frame" if (row['pos_critical_dels'] != []) or (row['pos_critical_inserts'] != []) else None
 
         text_row='; '.join([s for s in [support_status, homopolymeric_status, pos_critical_status] if s])
-        deletion_diagnosis.append(text_row)
+        variant_diagnosis.append(text_row)
 
-    df_temp['indel_position_english']=indel_position_english
-    df_temp['indel_diagnosis']=deletion_diagnosis
+    df_temp.pop('stop_mismatches')
+    df_temp.pop('aa_position')
+    df_temp.pop('stoploss_nt')
+    df_temp['variant_position_english']=variant_position_english
+    df_temp['variant_diagnosis']=variant_diagnosis
     return df_temp
 
-def analyse_position(bamfile, reference, ref_id, position, aa_position, gap_length, indel_type, gene_list, cons_id='', based=1):
+def analyse_position(bamfile, reference, ref_id, position, stop_specific, gap_length, indel_type, gene_list, cons_id='', based=1):
     """
     gather information for current frameshift position.
     """
@@ -512,7 +587,6 @@ def analyse_position(bamfile, reference, ref_id, position, aa_position, gap_leng
     if (analyse_position.ref_id == ref_id and analyse_position.region_start==region_start and analyse_position.region_end==region_end):
         # cache hit! no need to reparse the BAM file!
         variation_info = analyse_position.indels_gene_reg
-        coverage_info = analyse_position.coverage_gene_reg
     else:
         analyse_position.indels_gene_reg = variation_info = pysamstats.load_variation_strand(bamfile, fafile=reference,
                                      chrom=ref_id,
@@ -555,26 +629,53 @@ def analyse_position(bamfile, reference, ref_id, position, aa_position, gap_leng
     stops_rev = 0
     freq_stop_rev = 0
 
-    if indel_type is "stopgain" or indel_type is "stoploss":
+    aa_position = stop_specific[0]
+    stop_mismatches = stop_specific[1]
+    stoploss_nt = stop_specific[2]
+    critical_inserts = []
+    critical_dels = []
+    homopolymeric = 0
+
+    if indel_type == "stopgain":
         stops_fwd = variation_info[idx_pos].T_fwd[0]
         freq_stop_fwd = stops_fwd/reads_fwd if reads_fwd else 0
         stops_rev = variation_info[idx_pos].T_rev[0]
         freq_stop_rev = stops_rev/reads_rev if reads_rev else 0
         stops = stops_fwd + stops_rev
         freq_stop = stops/reads_all
+    elif indel_type == "stoploss":
+        if stoploss_nt == 'a' or stoploss_nt == 'A':
+            stops_fwd = variation_info[idx_pos].A_fwd[0]
+            stops_rev = variation_info[idx_pos].A_rev[0]
+        if stoploss_nt == 'c' or stoploss_nt == 'C':
+            stops_fwd = variation_info[idx_pos].C_fwd[0]
+            stops_rev = variation_info[idx_pos].C_rev[0]
+        if stoploss_nt == 'g' or stoploss_nt == 'G':
+            stops_fwd = variation_info[idx_pos].G_fwd[0]
+            stops_rev = variation_info[idx_pos].G_rev[0]
+        if stoploss_nt == 't' or stoploss_nt == 'T':
+            stops_fwd = variation_info[idx_pos].T_fwd[0]
+            stops_rev = variation_info[idx_pos].T_rev[0]
+        freq_stop_fwd = stops_fwd/reads_fwd if reads_fwd else 0
+        freq_stop_rev = stops_rev/reads_rev if reads_rev else 0
+        stops = stops_fwd + stops_rev
+        freq_stop = stops/reads_all
 
-    # NOTE the region of interest covers the position anyway, so we can re-use the whole region stats
-    indels_gene_reg = analyse_position.indels_gene_reg
-    critical_inserts, critical_dels, critical_stops= check_indels_gene_region(indels_gene_reg,position, gap_length, indel_type,
+    else:
+        # NOTE the region of interest covers the position anyway, so we can re-use the whole region stats
+        indels_gene_reg = analyse_position.indels_gene_reg
+        critical_inserts, critical_dels= check_indels_gene_region(indels_gene_reg,position, gap_length, indel_type,
                                                     region_start, region_end, based)
-
-    homopolyeric = check_homopolyeric(variation_info, position, gap_length, indel_type)
+        homopolymeric = check_homopolymeric(variation_info, position, gap_length, indel_type)
 
     dict = {'ref_id': ref_id,
             'start_position': position+based,
             'length': gap_length,
             'VARIANT': indel_type,
             'gene_region':gene_region[3],
+            'aa_position': aa_position,
+            'stop_mismatches': stop_mismatches,
+            'stoploss_nt': stoploss_nt,
             'reads_all': reads_all,
             'reads_fwd': reads_fwd,
             'reads_rev': reads_rev,
@@ -590,10 +691,16 @@ def analyse_position(bamfile, reference, ref_id, position, aa_position, gap_leng
             'freq_insert_rev':freq_insert_rev,
             'insertions_fwd': insertions_fwd,
             'insertions_rev': insertions_rev,
+            'stops': stops,
+            'freq_stop': freq_stop,
+            'freq_stop_fwd': freq_stop_fwd,
+            'freq_stop_rev': freq_stop_rev,
+            'stops_fwd': stops_fwd,
+            'stops_rev': stops_rev,
             'matches_ref': variation_info[idx_pos].matches[0],
             'pos_critical_inserts': critical_inserts,
             'pos_critical_dels': critical_dels,
-            'homopolymeric': homopolyeric,
+            'homopolymeric': homopolymeric,
             'ref_base': variation_info[idx_pos].ref[0],
             'cons_id': cons_id,
            }
@@ -611,17 +718,19 @@ def main():
     bamfile = args.bamfile	    # e.g.: 'REF_aln_410130_171220eg29_H5.bam'
     reference = args.reference	# e.g.: '../references/NC_045512.2.fasta'
     consensus = args.ref_majority_dels	# e.g.: 'ref_majority_dels.fasta'
-    orf1ab_name = "cds-YP_009724389.1"
+    orf1ab_name = args.or1ab # e.g.: 'cds-YP_009724389.1'
     
     gene_list = parse_gff(args.genes_gff, featuretype='gene') # e.g.: 'Genes_NC_045512.2.GFF3'
     cds_list = parse_gff(args.genes_gff, featuretype='CDS')
     
-    df = pd.DataFrame(columns=('ref_id','start_position','length','INDEL','gene_region',
+    df = pd.DataFrame(columns=('ref_id','start_position','length','VARIANT','gene_region', 'aa_position', 'stop_mismatches', 'stoploss_nt',
                                 'reads_all','reads_fwd','reads_rev',
                                 'deletions','freq_del','freq_del_fwd','freq_del_rev',
                                 'deletions_fwd','deletions_rev',
                                 'insertions','freq_insert','freq_insert_fwd','freq_insert_rev',
                                 'insertions_fwd','insertions_rev',
+                                'stops','freq_stop','freq_stop_fwd','freq_stop_rev',
+                                'stops_fwd','stops_rev',
                                 'matches_ref','pos_critical_inserts','pos_critical_dels',
                                 'homopolymeric','ref_base','cons_id'))
 
@@ -642,7 +751,7 @@ def main():
         # convert coordinate from pair-alignment space to reference-space
         corrected_insert, corrected_dels, corrected_stops = correct_positions(align_dels,align_inserts, align_stops)
         
-        align_stops = find_indels_in_stops(list_stops, list_dels, list_inserts)
+        corrected_stops, corrected_dels, corrected_insert = find_indels_in_stops(corrected_stops, corrected_dels, corrected_insert)
 
         # sort by ref_id, then by position to optimize cache hits in analyse_position
         for pos in sorted(corrected_dels+corrected_insert+corrected_stops, key=operator.itemgetter(2,0)):
@@ -651,14 +760,17 @@ def main():
             gap_length = int(pos[1])
             cons_id = pos[3]
             indel_type = pos[4]
-            aa_position = None
-            if indel_type is "stopgain" or indel_type is "stoploss":
-                aa_position = pos[7]
-            if gap_length%3==0 and indel_type is not "stopgain":
-                # only frameshift insertions , i.e. insert lenght not dividible by 3
+            stop_specific= None
+            if indel_type == "stopgain" or indel_type == "stoploss":
+                stop_specific = pos[7:10]
+            elif indel_type == "insertion" or indel_type == "deletion":
+                stop_specific = pos[5:8]
+            if gap_length%3==0 and indel_type != "stopgain" and indel_type != "stoploss":
+                # only frameshift insertions , i.e. insert lenght not dividible by 3; or stops
                 continue
-            pos_dict = analyse_position(bamfile, reference, ref_id, position, aa_position, gap_length,indel_type,
-                                        gene_list,cons_id, based=args.based)
+            pos_dict = analyse_position(bamfile, reference, ref_id, position, stop_specific, gap_length,indel_type,
+                                        gene_list,cons_id, based=based)
+            if(indel_type) == 'deletion':
             if (len(pos_dict)==0):
                 # skip when no information extracted
                 continue
