@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
 
+#################
+# Frameshift_deletions_checks
+#
+# Description:
+# Detect frameshifts indels and stop codons in the provided viral consensus sequences and generate a report of the event
+#
+# Authors:
+# Lara Fuhrmann, Ivan Topolsky (CBG ETHZ)- frameshift indels detection and reporting
+# Matteo Carrara (NEXUS Personalized Health Technologies) - stop codons detection and reporting
+#################
+
+
 import pysam
 import pysamstats
 import numpy as np
@@ -47,10 +59,10 @@ def parse_args():
 	[pos_critical_inserts]: Start positions of insertions in the same gene_region that occur in > 40% of reads;
 	[pos_critical_dels]: Start positions of deletions in the same gene_region that occur in > 40% of reads;
 	[homopolymeric]: True if either around the start or end position of the deletion three bases are the same, which may have caused the polymerase to skip during reverse transcription of viral RNA to cDNA, e.g. AATAG;
-	[ref_base]: base in the reference genome
-	[indel_position_english]: english sentence describing the indel
-	[indel_diagnosis]: english sentence with the indel diagnosis""",
-        [orf1ab]: CDS ID for the full Orf1ab CDS, comprising the ribosomal shift. In the GFF this CDS should consist of 2 entries with the same CDS ID due to the parital overlap caused by the ribosomal shift at translation time;
+	[ref_base]: base in the reference genome;
+	[indel_position_english]: english sentence describing the indel;
+	[indel_diagnosis]: english sentence with the indel diagnosis;
+        [orf1ab]: CDS ID for the full Orf1ab CDS, comprising the ribosomal shift. In the GFF this CDS should consist of 2 entries with the same CDS ID due to the parital overlap caused by the ribosomal shift at translation time""",
         formatter_class=Formatter)
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
@@ -70,8 +82,9 @@ def parse_args():
         help="GFF file listing genes positions on the reference sequence"
     )
     requiredNamed.add_argument(
-        "-O", "--orf1ab", required=True, dest='orf1ab', type=str, default = 'cds-YP_009724389.1'
-        help="CDS ID for the full Orf1ab CDS, comprising the ribosomal shift. In the GFF this CDS should consist of 2 entries with the same CDS ID due to the parital overlap caused by the ribosomal shift at translation time"
+        "-O", "--orf1ab", required=False, dest='orf1ab', type=str, default = 'cds-YP_009724389.1',
+        help="CDS ID for the full Orf1ab CDS, comprising the ribosomal shift. In the GFF this CDS should consist of 2 entries with the same CDS ID due to the partial overlap caused by the ribosomal shift at translation time"
+    )
     parser.add_argument(
         "-0", "--zero-based", required=False, dest='based', action='store_const', const=0, default=1,
         help="Use 0-based (python) instead of 1-based (standard) seq positions"
@@ -381,7 +394,7 @@ def find_indels_in_stops(list_stops, list_dels, list_inserts):
     if len(overlap_found) == 1:
         overlap_found = operator.itemgetter(*set(overlap_found))(list_stops)
         list_stops.remove(overlap_found)
-    elif len(overlap_found != 0):
+    elif len(overlap_found) != 0:
         for i in overlap_found:
             list_stops.remove(i)
     return list_stops, list_dels, list_inserts
@@ -507,16 +520,16 @@ def write_english_summary(df_temp):
             variant_type = 'Gap'
             variant_pos_temp = f"{variant_type} of {row['length']} nucleotide(s) found at refpos {row['start_position']}"
             if row['aa_position'] != "None":
-                variant_pos_temp = variant_pos_temp + f", causing an early stop codon at aminoacid position {row['aa_position']}"
+                variant_pos_temp = variant_pos_temp + f", in overlap with an early stop codon at aminoacid position {row['aa_position']}"
             if row['stoploss_nt'] != "None":
-                variant_pos_temp = variant_pos_temp + ", causing a stoploss" 
+                variant_pos_temp = variant_pos_temp + ", in overlap with a stoploss" 
         elif row['VARIANT']=='insertion':
             variant_type = 'Insertion'
             variant_pos_temp = f"{variant_type} of {row['length']} nucleotide(s) found at refpos {row['start_position']}"
             if row['aa_position'] != "None":
-                variant_pos_temp = variant_pos_temp + f", causing an early stop codon at aminoacid position {row['aa_position']}"
+                variant_pos_temp = variant_pos_temp + f", in overlap with an early stop codon at aminoacid position {row['aa_position']}"
             if row['stoploss_nt'] != "None":
-                variant_pos_temp = variant_pos_temp + ", causing a stoploss" 
+                variant_pos_temp = variant_pos_temp + ", in overlap with a stoploss" 
         elif row['VARIANT']=='stopgain':
             variant_type = 'Stopgain'
             variant_pos_temp = f"Early Stopgain found at refpos {row['start_position']}, aminoacid position {row['aa_position']}"
@@ -719,8 +732,9 @@ def main():
     bamfile = args.bamfile	    # e.g.: 'REF_aln_410130_171220eg29_H5.bam'
     reference = args.reference	# e.g.: '../references/NC_045512.2.fasta'
     consensus = args.ref_majority_dels	# e.g.: 'ref_majority_dels.fasta'
-    orf1ab_name = args.or1ab # e.g.: 'cds-YP_009724389.1'
-    
+    orf1ab_name = args.orf1ab # e.g.: 'cds-YP_009724389.1'
+    based = args.based # e.g.: 1
+
     gene_list = parse_gff(args.genes_gff, featuretype='gene') # e.g.: 'Genes_NC_045512.2.GFF3'
     cds_list = parse_gff(args.genes_gff, featuretype='CDS')
     
@@ -771,7 +785,6 @@ def main():
                 continue
             pos_dict = analyse_position(bamfile, reference, ref_id, position, stop_specific, gap_length,indel_type,
                                         gene_list,cons_id, based=based)
-            if(indel_type) == 'deletion':
             if (len(pos_dict)==0):
                 # skip when no information extracted
                 continue
