@@ -275,6 +275,7 @@ def list_all_stops(aligned_seqs, cds_positions, orf1ab_name):
            cds_sequence = aligned_seqs[1][cds[2]:cds[3]].seq
            cds_del_number = cds_sequence.count("-")
            cds_sequence = cds_sequence.ungap("-")
+       #TODO: add the option to provide a different stop codon table: https://biopython.org/docs/1.75/api/Bio.Seq.html#Bio.Seq.Seq.translate. See below for a second step that needs adaptation
        translated_cds = cds_sequence.translate()
        # We are interested in the all stops we find. If it's before the last codon, it's a stopgain. If there is no stop codon at all, it's a stoploss
        stop_found = re.finditer("\*", str(translated_cds))
@@ -650,6 +651,7 @@ def analyse_position(bamfile, reference, ref_id, position, stop_specific, gap_le
     critical_dels = []
     homopolymeric = 0
 
+    # TODO: The coverage for stopgains assumes a standard stop codon table and therefore codons always starting with T. When implementing alternative stop codon tables we need to follow an approach similar to what is done below for stoplosses: store the first aminoacid of the codon explicitly and recover the correct coverage here
     if indel_type == "stopgain":
         stops_fwd = variation_info[idx_pos].T_fwd[0]
         freq_stop_fwd = stops_fwd/reads_fwd if reads_fwd else 0
