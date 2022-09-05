@@ -348,10 +348,12 @@ def find_mismatches_in_stops(aligned_seqs, consensus_space_pos):
         ref_nt = aligned_seqs[0][position_0based]
         cons_nt = aligned_seqs[1][position_0based]
         if cons_nt == "-":
+            position_0based = position_0based+1
             continue
         if ref_nt != cons_nt:
             if ref_nt != "-":
                 mismatches = mismatches + 1
+        position_0based = position_0based+1
         evaluated_pos = evaluated_pos + 1
     return mismatches
 
