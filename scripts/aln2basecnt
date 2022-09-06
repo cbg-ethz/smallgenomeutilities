@@ -46,6 +46,9 @@ def parse_args():
     parser.add_argument('-A', '--alphabet', metavar='alphabet', required=False,
                         default='ACGT-',
                         type=str, dest='alpha', help='alphabet to use')
+    parser.add_argument('-f', '--first', metavar='ARRAY_BASE', required=False,
+                        default=0, choices=[0,1],
+                        type=int, dest='first', help='select whether the first position is named "0" (standard for python tools such as pysam and older versions of smallgenomeutilities) or "1" (standard scientific notation used in most tools)')
     parser.add_argument('-s', '--stats', metavar='YAML/JSON/INI', required=False,
                         type=str, dest='stats', help="file to write stats to")
     parser.add_argument("FILE", nargs=1, metavar='BAM/CRAM', help="alignment file")
@@ -67,7 +70,7 @@ def main():
 
     # data frames holding the TSV data
     cols = pd.MultiIndex.from_product([[args.name],list(args.alpha)],names=['sample', 'nt'])
-    basecnt=df=pd.DataFrame(columns=cols)
+    basecnt=pd.DataFrame(columns=cols)
     coverage=pd.DataFrame(columns=[args.name])
     with pysam.AlignmentFile(bamfile, 'rc' if os.path.splitext(bamfile)[1] == '.cram' else 'rb') as alnfile:
         for reference_name in alnfile.references:
@@ -76,14 +79,14 @@ def main():
 
             nt_counts, nr, ins, rl = get_cnt_matrix(alnfile, reference_name,alpha=args.alpha)
 
-            index = pd.MultiIndex.from_product([[reference_name],np.arange(region_len)],names=['ref', 'pos'])
+            index = pd.MultiIndex.from_product([[reference_name],np.arange(args.first,region_len+args.first)],names=['ref', 'pos'])
             cnt_df = pd.DataFrame(data=nt_counts, index=index, columns=cols)
-            basecnt = basecnt.append(cnt_df) if reads > 0 else cnt_df
+            basecnt = pd.concat([basecnt, cnt_df], copy=False) if reads > 0 else cnt_df
 
             # NOTE the following will include all nt from the alphabet (including e.g.: `-`) and skip any non listed (e.g.: `N`)
             np_coverage = np.sum(nt_counts, axis=1)
             cov_df = pd.DataFrame(data=np_coverage, index=index, columns=[args.name])
-            coverage = coverage.append(cov_df) if reads > 0 else cov_df
+            coverage = pd.concat([coverage, cov_df], copy=False) if reads > 0 else cov_df
 
             # gather useful stats
             reads+=nr
@@ -106,9 +109,10 @@ def main():
             GC_frac = (GC / bstot) if bstot else 0.0
 
         # append the useful stats to the summary desciption
-        desc=coverage.describe(include=[np.number]).append(pd.DataFrame({args.name:
-                {'reads':reads,'insert_mean':(instot / reads),'readlen_mean':(rltot / reads),'GC':GC_frac}})
-            ) if reads else pd.DataFrame({args.name:
+        desc=pd.concat([
+                coverage.describe(include=[np.number]),
+                pd.DataFrame({args.name:  {'reads':reads,'insert_mean':(instot / reads),'readlen_mean':(rltot / reads),'GC':GC_frac}})
+            ]) if reads else pd.DataFrame({args.name:
                 # only zeros if no reads at all
                 {k:0.0 for k in ('count','mean','std','25%','50%','75%','max','reads','insert_mean','readlen_mean','GC')}})
         # detect format
