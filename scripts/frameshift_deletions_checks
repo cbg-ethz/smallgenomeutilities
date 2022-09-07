@@ -801,6 +801,8 @@ def main():
             if (len(pos_dict)==0):
                 # skip when no information extracted
                 continue
+            # explicitly transform the dictionary in a pandas dataframe to avoid errors
+            pos_dict=pd.DataFrame.from_dict(pos_dict, orient='index').T
             df = pd.concat([df, pos_dict], ignore_index=True)
 
     df = remove_df_duplicates(df)
