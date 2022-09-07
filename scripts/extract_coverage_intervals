@@ -21,42 +21,49 @@ def parse_args():
         description="Script to extract coverage windows for ShoRAH",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
-        "-r", required=False, default=None, metavar='BED', dest='region',
+        "-r", "--region", required=False, default=None, metavar='BED', dest='region',
         help="Region of interested in BED format, e.g. HXB2:2253-3869. Loci "
              "are interpreted using 0-based indexing, and a half-open "
-             "interval is used, i.e, [start:end)"
+             "interval is used, i.e, [start:end). "
+             "If the input TSV isn't 0-based, see option -b below"
     )
     parser.add_argument(
-        "-cf", required=False, default=None, metavar='TSV',
+        "-cf", "--coverage-file", required=False, default=None, metavar='TSV',
         dest='coverage_file',
         help="File containing coverage per locus per sample. Samples are "
              "expected as columns and loci as rows. This option is not "
              "compatible with the read-window overlap thresholding"
     )
     parser.add_argument(
-        "-c", required=False, default=100, metavar='INT', dest='min_coverage',
+        "-b", "--based", "--first", required=False, default=0, choices=[0, 1], type=int, metavar='INPUTBASED', dest='based',
+        help="Specifies whether the input TSV is 0-based (as used by python tools such as pysam) or 1-based (as standard notation in genetics), and thus should be converted before outputing the 0-based output."
+             "are interpreted using 0-based indexing, and a half-open "
+             "interval is used, i.e, [start:end)"
+    )
+    parser.add_argument(
+        "-c", "--min-coverage", required=False, default=100, metavar='INT', dest='min_coverage',
         type=int, help="Minimum read depth per window"
     )
     parser.add_argument(
-        "-f", required=False, default=0.85, metavar='FLOAT',
+        "-f", "--window-overlap", required=False, default=0.85, metavar='FLOAT',
         dest='window_overlap',
         help="Threshold on the overlap between each read and the window"
     )
     parser.add_argument(
-        "-w", required=False, default='201', metavar='len1,len2,...',
+        "-w", "--window-lenght", required=False, default='201', metavar='len1,len2,...',
         dest='window_len', help="Window length used by ShoRAH"
     )
     parser.add_argument(
-        "-s", required=False, default='67', metavar='shift1, shift2, ...',
+        "-s", "--window-shift", required=False, default='67', metavar='shift1, shift2, ...',
         dest='window_shift', help="Window shifts used by ShoRAH"
     )
     parser.add_argument(
-        "-N", required=False, default=None, metavar='name1,name2,...',
+        "-N", "--names", "--IDs", required=False, default=None, metavar='name1,name2,...',
         dest="patientIDs",
         help="Patient/sample identifiers as comma separated strings"
     )
     parser.add_argument(
-        "-e", required=False, action='store_true', default=False,
+        "-e", "--right-offset", required=False, action='store_true', default=False,
         dest='right_offset',
         help="Indicate whether to apply a more liberal shift on intervals' "
              "right-endpoint"
@@ -68,10 +75,10 @@ def parse_args():
              "rather than windows for SNV calling using ShoRAH"
     )
     parser.add_argument(
-        "-t", required=False, default=1, metavar='INT', dest='thrds',
+        "-t", "--threads", required=False, default=1, metavar='INT', dest='thrds',
         type=int, help="Number of threads")
     parser.add_argument(
-        "-o", required=False, default="coverage_intervals.tsv",
+        "-o", "--output", "--outfile", required=False, default="coverage_intervals.tsv",
         metavar='OUTPUT', dest='outfile', help="Output file name"
     )
     parser.add_argument(
@@ -291,7 +298,7 @@ def main():
         # Load input file
         coverage = np.loadtxt(args.coverage_file, dtype=int, delimiter='\t',
                               skiprows=1)
-        loci = coverage[:, 0]
+        loci = coverage[:, 0] - args.based
         coverage = coverage[:, 1:]
         assert coverage.shape[1] == num_samples, 'Number of columns in the coverage file do not match number of input files.'
 

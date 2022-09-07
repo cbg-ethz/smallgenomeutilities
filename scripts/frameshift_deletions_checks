@@ -801,7 +801,7 @@ def main():
             if (len(pos_dict)==0):
                 # skip when no information extracted
                 continue
-            df = df.append(pos_dict, ignore_index=True)
+            df = pd.concat([df, pos_dict], ignore_index=True)
 
     df = remove_df_duplicates(df)
     if args.english==True:
