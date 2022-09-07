@@ -277,7 +277,6 @@ def list_all_stops(aligned_seqs, cds_positions, orf1ab_name):
            cds_del_number = cds_sequence.count("-")
            cds_sequence = cds_sequence.ungap("-")
            cds_sequence_for_translation = cds_sequence + ('n' * cds_del_number)
-           
        #TODO: add the option to provide a different stop codon table: https://biopython.org/docs/1.75/api/Bio.Seq.html#Bio.Seq.Seq.translate. See below for a second step that needs adaptation
        translated_cds = cds_sequence_for_translation.translate()
        # We are interested in the all stops we find. If it's before the last codon, it's a stopgain. If there is no stop codon at all, it's a stoploss
@@ -316,6 +315,7 @@ def list_all_stops(aligned_seqs, cds_positions, orf1ab_name):
                stoploss_nt = aligned_seqs[1][stop_abs_pos_nt[i]-1]
            else:
                stoploss_nt = "None"
+           tmp_list = [ stop_abs_pos_nt[i], 3, aligned_seqs[0].id, aligned_seqs[1].id, stoptype, cds[0], cds[1], stop_pos_aa[i], mismatches, stoploss_nt ]
            stop_list.append([ stop_abs_pos_nt[i], 3, aligned_seqs[0].id, aligned_seqs[1].id, stoptype, cds[0], cds[1], stop_pos_aa[i], mismatches, stoploss_nt ])
     return stop_list
            
@@ -732,6 +732,13 @@ analyse_position.region_start=None
 analyse_position.region_end=None
 analyse_position.indels_gene_reg=None
 
+def remove_df_duplicates(df_temp):
+    # If we have a deletion in orf1b that restores the frame for orf1ab, we end up with duplicated stop entries, as the report always defines the region as orf1ab. We remove duplicates here
+    dup_pos = df_temp.duplicated(subset = "start_position")
+    dup_pos = [i for i, x in enumerate(dup_pos) if x]
+    df_temp = df_temp.drop(dup_pos)
+    return df_temp
+    
 def main():
 
     args = parse_args()
@@ -796,6 +803,7 @@ def main():
                 continue
             df = df.append(pos_dict, ignore_index=True)
 
+    df = remove_df_duplicates(df)
     if args.english==True:
         print("adding english language")
         df= write_english_summary(df)
