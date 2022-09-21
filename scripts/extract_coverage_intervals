@@ -36,7 +36,7 @@ def parse_args():
     )
     parser.add_argument(
         "-b", "--based", "--first", required=False, default=0, choices=[0, 1], type=int, metavar='INPUTBASED', dest='based',
-        help="Specifies whether the input TSV is 0-based (as used by python tools such as pysam) or 1-based (as standard notation in genetics), and thus should be converted before outputing the 0-based output."
+        help="Specifies whether the input TSV is 0-based (as used by python tools such as pysamm, or in BED files) or 1-based (as standard notation in genetics, or in VCF files), and thus should be converted before outputing the 0-based output."
              "are interpreted using 0-based indexing, and a half-open "
              "interval is used, i.e, [start:end)"
     )

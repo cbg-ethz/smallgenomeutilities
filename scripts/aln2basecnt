@@ -48,7 +48,7 @@ def parse_args():
                         type=str, dest='alpha', help='alphabet to use')
     parser.add_argument('-f', '--first', metavar='ARRAY_BASE', required=False,
                         default=0, choices=[0,1],
-                        type=int, dest='first', help='select whether the first position is named "0" (standard for python tools such as pysam and older versions of smallgenomeutilities) or "1" (standard scientific notation used in most tools)')
+                        type=int, dest='first', help='select whether the first position is named "0" (standard for python tools such as pysam, older versions of smallgenomeutilities, and the BED format) or "1" (standard scientific notation used in most tools, and most text formats such as VCF and GFF)')
     parser.add_argument('-s', '--stats', metavar='YAML/JSON/INI', required=False,
                         type=str, dest='stats', help="file to write stats to")
     parser.add_argument("FILE", nargs=1, metavar='BAM/CRAM', help="alignment file")
