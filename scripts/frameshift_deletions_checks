@@ -316,7 +316,10 @@ def list_all_stops(aligned_seqs, cds_positions, orf1ab_name):
            else:
                stoploss_nt = "None"
            tmp_list = [ stop_abs_pos_nt[i], 3, aligned_seqs[0].id, aligned_seqs[1].id, stoptype, cds[0], cds[1], stop_pos_aa[i], mismatches, stoploss_nt ]
-           stop_list.append([ stop_abs_pos_nt[i], 3, aligned_seqs[0].id, aligned_seqs[1].id, stoptype, cds[0], cds[1], stop_pos_aa[i], mismatches, stoploss_nt ])
+           # Do not append duplicates. This removes duplicate antries for the alternate full read of orf1ab after the cds with the ribosome shift has been processed
+           tmp_stop_list = [ [a[0], a[1], a[4], a[5] ] for a in stop_list ]
+           if [ tmp_list[0], tmp_list[1], tmp_list[4], tmp_list[5] ] not in tmp_stop_list:
+               stop_list.append([ stop_abs_pos_nt[i], 3, aligned_seqs[0].id, aligned_seqs[1].id, stoptype, cds[0], cds[1], stop_pos_aa[i], mismatches, stoploss_nt ])
     return stop_list
            
 def correct_stop_abs_pos(stop_abs_pos_nt, aligned_seqs, cds_start):
@@ -329,11 +332,8 @@ def correct_stop_abs_pos(stop_abs_pos_nt, aligned_seqs, cds_start):
         failsafe = 0
         while not converged:
             preceding_cds = aligned_seqs[1][cds_start:stop+del_num].seq
-            #print(str(preceding_cds))
             previous_del_num = del_num
-            #print("prev " + str(previous_del_num))
             del_num = preceding_cds.count("-")
-            #print("del num "+str(del_num))
             if previous_del_num == del_num:
                 converged = True
             failsafe = failsafe + 1
