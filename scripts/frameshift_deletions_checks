@@ -494,14 +494,15 @@ def correct_positions(list_dels,list_inserts, list_stops):
         for deletion in list_dels:
             if deletion[0] > insert[0]:
                 deletion[0]-=insert[1]
-    # shift stops due to insertions and deletions occuring before. Shift to zero-based space
+    # shift stops due to insertions and deletions occuring before
     for count, insert in enumerate(list_inserts):
         for j in range(len(list_stops)):
             cds_stops_corrected = []
             if list_stops[j][0] > insert[0]:
-                list_stops[j][0] = list_stops[j][0] - insert[1] -1
-            else:
-                list_stops[j][0] = list_stops[j][0] -1
+                 list_stops[j][0] = list_stops[j][0] - insert[1]
+    # shift stops to zero-based space
+    for j in range(len(list_stops)):
+        list_stops[j][0] = list_stops[j][0] -1
     # shift insertions due to insertions occuring before
     for count, insert in enumerate(list_inserts):
         for j in range(count+1, len(list_inserts)):
