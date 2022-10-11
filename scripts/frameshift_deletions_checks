@@ -293,8 +293,11 @@ def list_all_stops(aligned_seqs, cds_positions, orf1ab_name):
        else:
            # The positions in stop_positions are 0 based because they are positions in a python string. Converting back immediately to 1 based. No need to do that for the stoplosses because they are bound to the length of the string, not to the position
            stop_pos_aa = [ sp+1 for sp in stop_positions ]
-           if stop_pos_aa[-1] == len(translated_cds):
+           if stop_pos_aa[-1] == len(translated_cds) and stoptype != "stoploss":
                stop_pos_aa.pop()
+       # If there is no actual stops, ignore this CDS and move to the next
+       if len(stop_pos_aa) == 0:
+           continue
        stop_rel_pos_nt = [ (sp*3)-2 for sp in stop_pos_aa ]
        # The ribosome shifts makes it so the position after the shift is +1 the actual position on the reference. Shift back if the cds is orf1ab and the position is after the start of the second part of the CDS 
        stop_abs_pos_nt = [ cds[2]+sp for sp in stop_rel_pos_nt ]
@@ -307,19 +310,29 @@ def list_all_stops(aligned_seqs, cds_positions, orf1ab_name):
                else:
                    stop_abs_pos_nt_corrected.append(stop)
            stop_abs_pos_nt = stop_abs_pos_nt_corrected
+           #Adding padding at the end of the sequence at translation time can shift the position of the stop codon, which can be not at the end of the translated string. Here, after all corrections, we check again based on the absolute position of the stop, compared to the annotation. Please remember that the stop nt position is the first of the 3 nucleotides, so we need to remove 2 from the end of the gene
+       if cds[1] == orf1ab_name:
+           if stop_abs_pos_nt[-1] == (cds_positions[1][3]-2):
+               stop_abs_pos_nt.pop()
+               stop_pos_aa.pop()
+       else:
+           if stop_abs_pos_nt[-1] == (cds[3]-2) and stoptype != "stoploss":
+                   stop_abs_pos_nt.pop()
+                   stop_pos_aa.pop()
        # Report one stop per element for compatibility with the downstream functions. Differentiate between stopgain and stoploss. Remember to remove the expected stop at the end of the CDS if it exists
        # at this point check if the position has any mismatches with the reference
-       for i in range(0, len(stop_pos_aa)):
-           mismatches = find_mismatches_in_stops(aligned_seqs, stop_abs_pos_nt[i])
-           if stoptype == "stoploss":
-               stoploss_nt = aligned_seqs[1][stop_abs_pos_nt[i]-1]
-           else:
-               stoploss_nt = "None"
-           tmp_list = [ stop_abs_pos_nt[i], 3, aligned_seqs[0].id, aligned_seqs[1].id, stoptype, cds[0], cds[1], stop_pos_aa[i], mismatches, stoploss_nt ]
-           # Do not append duplicates. This removes duplicate antries for the alternate full read of orf1ab after the cds with the ribosome shift has been processed
-           tmp_stop_list = [ [a[0], a[1], a[4], a[5] ] for a in stop_list ]
-           if [ tmp_list[0], tmp_list[1], tmp_list[4], tmp_list[5] ] not in tmp_stop_list:
-               stop_list.append([ stop_abs_pos_nt[i], 3, aligned_seqs[0].id, aligned_seqs[1].id, stoptype, cds[0], cds[1], stop_pos_aa[i], mismatches, stoploss_nt ])
+       if len(stop_pos_aa) != 0:
+           for i in range(0, len(stop_pos_aa)):
+               mismatches = find_mismatches_in_stops(aligned_seqs, stop_abs_pos_nt[i])
+               if stoptype == "stoploss":
+                   stoploss_nt = aligned_seqs[1][stop_abs_pos_nt[i]-1]
+               else:
+                   stoploss_nt = "None"
+               tmp_list = [ stop_abs_pos_nt[i], 3, aligned_seqs[0].id, aligned_seqs[1].id, stoptype, cds[0], cds[1], stop_pos_aa[i], mismatches, stoploss_nt ]
+               # Do not append duplicates. This removes duplicate antries for the alternate full read of orf1ab after the cds with the ribosome shift has been processed
+               tmp_stop_list = [ [a[0], a[1], a[4], a[5] ] for a in stop_list ]
+               if [ tmp_list[0], tmp_list[1], tmp_list[4], tmp_list[5] ] not in tmp_stop_list:
+                   stop_list.append([ stop_abs_pos_nt[i], 3, aligned_seqs[0].id, aligned_seqs[1].id, stoptype, cds[0], cds[1], stop_pos_aa[i], mismatches, stoploss_nt ])
     return stop_list
            
 def correct_stop_abs_pos(stop_abs_pos_nt, aligned_seqs, cds_start):
