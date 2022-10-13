@@ -140,13 +140,30 @@ def get_cnt_matrix (alnfile, reference_name, alpha='ACGT-'):
     for read in alnfile.fetch(reference=reference_name):
         reads+=1
         insert_tot+=abs(read.template_length)
+        # NOTE no real lenght (happens with primers dimers, once primers are trimmed, remaining lenght can be 0 or 1)
+        if read.reference_end == read.reference_start:
+            # dimers, etc.
+            continue
         rlen_tot+=read.reference_end-read.reference_start
         aligned_read = AlignedRead(read)
         #alignment_positions = aligned_read.get_alignment_positions()
         alignment_sequence = np.array(
             aligned_read.get_alignment_sequence(), dtype='c').view(np.uint8)
+        if alignment_sequence.size < 1:
+            # dimers, etc.
+            continue
 
         #nt_counts[alignment_positions,:] += np.equal.outer(alignment_sequence, nt_alpha)
-        nt_counts[read.reference_start:read.reference_end,:] += np.equal.outer(alignment_sequence, nt_alpha)
+        try:
+            nt_counts[read.reference_start:read.reference_end,:] += np.equal.outer(alignment_sequence, nt_alpha)
+        except ValueError:
+            print(f"""
+Cannot sum read to the count matrix
+read number:\t{reads}
+template len:\t{read.template_length}
+ref start:\t{read.reference_start}
+ref ends: \t{read.reference_end}""")
+            print(alignment_sequence)
+            print(np.equal.outer(alignment_sequence, nt_alpha))
 
     return nt_counts, reads, insert_tot, rlen_tot
