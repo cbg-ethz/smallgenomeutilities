@@ -143,8 +143,34 @@ Given a multiple sequence alignment, remove loci with a gap fraction above a cer
 Contributions
 *************
 
-- David Seifert <david.seifert@bsse.ethz.ch>
-- Susana Posada Cespedes <susana.posada@bsse.ethz.ch>
-- Ivan Blagoev Topolsky <ivan.topolsky@sib.swiss>
-- Lara Fuhrmann <lara.fuhrmann@bsse.ethz.ch>
-- Mateo Carrara <carrara@nexus.ethz.ch>
+- David Seifert	<david.seifert@bsse.ethz.ch>	|orcdseif|_	|gitdseif|_
+- Susana Posada Cespedes	<susana.posada@bsse.ethz.ch>	|orcsposa|_	|gitsposa|_
+- Ivan Blagoev Topolsky	<ivan.topolsky@sib.swiss>	|orcitopo|_	|gititopo|_
+- Lara Fuhrmann	<lara.fuhrmann@bsse.ethz.ch>	|orclfuhr|_	|gitlfuhr|_
+- Mateo Carrara	<carrara@nexus.ethz.ch>	|orcmcarr|_	|gitmcarr|_
+
+.. _orcdseif : https://orcid.org/0000-0003-4739-5110
+.. _gitdseif : https://github.com/SoapZA
+.. _orcsposa : https://orcid.org/0000-0002-7459-8186
+.. _gitsposa : https://github.com/sposadac
+.. _orcitopo : https://orcid.org/0000-0002-7561-0810
+.. _gititopo : https://github.com/dryak
+.. _orclfuhr : https://orcid.org/0000-0001-6405-0654
+.. _gitlfuhr : https://github.com/LaraFuhrmann
+.. _orcmcarr : https://orcid.org/0000-0002-8559-8296
+.. _gitmcarr : https://github.com/mcarrara-bioinfo
+
+.. |orcdseif| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg 
+.. |orcsposa| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg 
+.. |orcitopo| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg 
+.. |orclfuhr| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg 
+.. |orcmcarr| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg 
+
+.. |gitdseif| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
+.. |gitsposa| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
+.. |gititopo| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
+.. |gitlfuhr| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
+.. |gitmcarr| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
+
+.. |github| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
+.. |orcid| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
