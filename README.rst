@@ -2,12 +2,25 @@
 smallgenomeutilities
 ####################
 
+
+.. image:: https://img.shields.io/conda/dn/bioconda/smallgenomeutilities.svg?label=Bioconda
+   :alt: Bioconda package
+   :target: https://bioconda.github.io/recipes/smallgenomeutilities/README.html
+.. image:: https://quay.io/repository/biocontainers/smallgenomeutilities/status
+   :alt: Docker container
+   :target: https://quay.io/repository/biocontainers/smallgenomeutilities
+
+
 The smallgenomeutilities are a collection of scripts that is useful for dealing and manipulating NGS data of small viral genomes. They are written in Python 3 with a small number of dependencies.
+
+The smallgenomeutilities are part of the `V-pipe workflow for analysing NGS data of short viral genomes <https://github.com/cbg-ethz/V-pipe>`_.
 
 
 ************
 Dependencies
 ************
+
+You can install these python modules either using pip or `bioconda <https://bioconda.github.io/>`_:
 
 - biopython
 - bcbio-gff
@@ -21,14 +34,31 @@ Dependencies
 - progress
 - yaml
 
+In addition to the modules, frameshift_deletions_checks currently requires `mafft <https://mafft.cbrc.jp/alignment/software/>`_ being installed -- it is also `available on bioconda <https://bioconda.github.io/recipes/mafft/README.html>`_.
+
+
 ************
 Installation
 ************
 
-The recommended way to install the smallgenomeutilities is using pip:
+The recommended way to install the smallgenomeutilities is using the `bioconda package <https://bioconda.github.io/recipes/smallgenomeutilities/README.html>`_:
 
 .. code-block:: bash
 
+   mamba install smallgenomeutilities
+
+
+Another possibility is using pip:
+
+.. code-block:: bash
+
+   # install from the current directory
+   pip install --editable .
+
+   # install from GitHub
+   pip install git+https://github.com/cbg-ethz/smallgenomeutilities.git
+
+   # install from Pypi
    pip install smallgenomeutilities
 
 
@@ -117,3 +147,4 @@ Contributions
 - Susana Posada Cespedes <susana.posada@bsse.ethz.ch>
 - Ivan Blagoev Topolsky <ivan.topolsky@sib.swiss>
 - Lara Fuhrmann <lara.fuhrmann@bsse.ethz.ch>
+- Mateo Carrara <carrara@nexus.ethz.ch>

@@ -15,9 +15,9 @@ def readme():
 
 setup(
     name="smallgenomeutilities",
-    version="0.3.6",
-    author="David Seifert, Susana Posada Cespedes, Ivan Topolsky, Lara Fuhrmann",
-    author_email="david.seifert@bsse.ethz.ch, susana.posada@bsse.ethz.ch, ivan.topolsky@bsse.ethz.ch, lara.fuhrmann@bsse.ethz.ch",
+    version="0.3.9",
+    author="David Seifert, Susana Posada Cespedes, Ivan Topolsky, Lara Fuhrmann, Matteo Carrara",
+    author_email="david.seifert@bsse.ethz.ch, susana.posada@bsse.ethz.ch, ivan.topolsky@bsse.ethz.ch, lara.fuhrmann@bsse.ethz.ch, carrara@nexus.ethz.ch",
     description=(
         "A collection of scripts that are useful for dealing with viral RNA NGS data."),
     license="GPL2+",
