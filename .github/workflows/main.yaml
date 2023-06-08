@@ -1,0 +1,65 @@
+name: Tests
+
+on:
+  push:
+  #pull_request:
+
+jobs:
+  cancel-previous-jobs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.9.1
+        with:
+          access_token: ${{ github.token }}
+
+  runtime_tests:
+    strategy:
+      max-parallel: 5
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest] #, macos-latest]
+        python-version: ["3.10"] #, "3.9"]
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+            lfs: false
+            # NOTE to save on bandwidth costs, GitHub Action will not use GitHub's own LFS
+
+      - name: Fetch test-data
+        # NOTE to save on bandwidth costs, pull data from BSSE's GitLab LFS instead
+        run: |
+          git config --file .lfsconfig lfs.url "https://git.bsse.ethz.ch/cbg/viruses/smallgenomeutilities.git/info/lfs"
+          git lfs install
+          git lfs pull
+          git lfs checkout
+
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniforge-version: latest
+          python-version: ${{ matrix.python-version }}
+          mamba-version: "*"
+          channels: conda-forge,bioconda #,defaults # see: https://github.com/conda-forge/status/issues/144
+          channel-priority: strict
+          activate-environment: smgu
+          auto-update-conda: false
+
+      - name: Install dependencies
+        run: mamba install --yes pip pytest mafft biopython bcbio-gff "pysam>=0.16" numpy pysamstats pandas scipy scikit-learn matplotlib-base progress pyyaml
+
+      - name: Build package
+        run: |
+          pip install --no-deps .
+
+      - name: Test package
+        run: |
+          pytest -v
