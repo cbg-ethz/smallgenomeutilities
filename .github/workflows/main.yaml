@@ -4,16 +4,11 @@ on:
   push:
   #pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
-  cancel-previous-jobs:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.9.1
-        with:
-          access_token: ${{ github.token }}
-
   runtime_tests:
     strategy:
       max-parallel: 5
@@ -26,6 +21,7 @@ jobs:
 
     defaults:
       run:
+        # NOTE login shell: to force loading conda profile
         shell: bash -l {0}
 
     steps:
