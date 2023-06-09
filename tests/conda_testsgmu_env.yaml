@@ -1,0 +1,25 @@
+name: testsmgu
+channels:
+  - conda-forge
+  - bioconda
+  #- defaults # see: https://github.com/conda-forge/status/issues/144
+dependencies:
+  # NOTE keep in sync with ../pyproject.toml
+
+  # build and test
+  - setuptools-scm
+  - pytest
+
+  # runtime
+  - biopython
+  - bcbio-gff
+  - pysam >=0.16
+  - pysamstats
+  - pandas
+  - numpy
+  - scipy
+  - scikit-learn
+  - matplotlib-base
+  - progress
+  - pyyaml
+  - mafft

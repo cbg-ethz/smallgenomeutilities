@@ -28,6 +28,7 @@ classifiers=[
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
 ]
+# NOTE keep in sync with tests/conda_testsgmu_env.yaml
 dependencies = [
     "biopython",
     "bcbio-gff",

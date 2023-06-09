@@ -42,15 +42,14 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v2
         with:
           miniforge-version: latest
+          miniforge-variant: Mambaforge
           python-version: ${{ matrix.python-version }}
           mamba-version: "*"
           channels: conda-forge,bioconda #,defaults # see: https://github.com/conda-forge/status/issues/144
           channel-priority: strict
-          activate-environment: smgu
+          activate-environment: testsmgu
           auto-update-conda: false
-
-      - name: Install dependencies
-        run: mamba install --yes pip setuptools-scm pytest mafft biopython bcbio-gff "pysam>=0.16" numpy pysamstats pandas scipy scikit-learn matplotlib-base progress pyyaml
+          environment-file: tests/conda_testsgmu_env.yaml
 
       - name: Build package
         run: |
