@@ -25,9 +25,6 @@ def test_workflow(tmp_path):
     # data: its handled with LFS
     datapath = PurePath("tests/test_frameshift_deletions_checks")
 
-    # dummy run
-    # subprocess.check_call(["frameshift_deletions_checks", "--version"])
-
     # test stop codons in frameshift_deletions_checks
     for stoptype in ["gain", "loss"]:
         for variant in ["", "_with_deletions", "_with_insertions"]:
