@@ -28,6 +28,8 @@ import os
 import tempfile
 import sys
 
+from smallgenomeutilities._version import __version__
+
 
 
 def str2bool(v):
@@ -47,22 +49,24 @@ def parse_args():
     class Formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter): pass
 
     parser = argparse.ArgumentParser(
-        description="Produces a report about frameshifting indels in a consensus sequences",
+        description="Produces a report about frameshifting indels and stops in a consensus sequences",
         epilog=u"""columns signification:
+	[ref_id/cons_id]: name of the sequence in the reference and consensus
+	[start_position/length]: location of the variant
+	[VARIANT]: one of: "insertion", "deletion", "stopgain" or "stoploss"
 	[gene_region]: Gene in which the deletion is found according to -g argument;
 	[reads_all]: Total number of reads covering the indel;
 	[reads_fwd]: Total nubmer of forward reads covering the indel;
 	[reads_rev]: Total nubmer of reverse reads covering the indel;
-	[deletions/insertions]: Number of reads supporting the deletion/insertion;
-	[freq_del/freq_insert]: Fraction of reads supporting the deletion/insertion;
+	[deletions/insertions/stops]: Number of reads supporting the deletion/insertion/stop;
+	[freq_del/freq_insert/freq_stop]: Fraction of reads supporting the deletion/insertion/stop;
 	[matches_ref]: number of reads that matche with the reference base;
 	[pos_critical_inserts]: Start positions of insertions in the same gene_region that occur in > 40% of reads;
 	[pos_critical_dels]: Start positions of deletions in the same gene_region that occur in > 40% of reads;
 	[homopolymeric]: True if either around the start or end position of the deletion three bases are the same, which may have caused the polymerase to skip during reverse transcription of viral RNA to cDNA, e.g. AATAG;
 	[ref_base]: base in the reference genome;
-	[indel_position_english]: english sentence describing the indel;
-	[indel_diagnosis]: english sentence with the indel diagnosis;
-        [orf1ab]: CDS ID for the full Orf1ab CDS, comprising the ribosomal shift. In the GFF this CDS should consist of 2 entries with the same CDS ID due to the parital overlap caused by the ribosomal shift at translation time""",
+	[variant_position_english]: english sentence describing the indel or stop;
+	[variant_diagnosis]: english sentence with the indel diagnosis""",
         formatter_class=Formatter)
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
@@ -99,6 +103,8 @@ def parse_args():
         "-e", "--english", required=False, type=str2bool, nargs='?', const=True, dest='english',
         help="If True writes english summary diagnosis."
     )
+    parser.add_argument(
+        "-v", "--version", action='version', version='%(prog)s {version}'.format(version=__version__))
     parser.set_defaults(english=True)
     return parser.parse_args()
 

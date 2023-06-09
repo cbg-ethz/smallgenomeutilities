@@ -50,11 +50,15 @@ jobs:
           auto-update-conda: false
 
       - name: Install dependencies
-        run: mamba install --yes pip pytest mafft biopython bcbio-gff "pysam>=0.16" numpy pysamstats pandas scipy scikit-learn matplotlib-base progress pyyaml
+        run: mamba install --yes pip setuptools-scm pytest mafft biopython bcbio-gff "pysam>=0.16" numpy pysamstats pandas scipy scikit-learn matplotlib-base progress pyyaml
 
       - name: Build package
         run: |
           pip install --no-deps .
+
+      - name: dummy run
+        run: |
+          frameshift_deletions_checks --version
 
       - name: Test package
         run: |
