@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+
+#################
+# prepare_primers
+#
+# Description:
+# Creates all necessary primer resources for a full V-pipe run, starting from a primer bed file
+#
+# Authors:
+# Matteo Carrara (NEXUS Personalized Health Technologies)
+#################
+
+import pandas as pd
+import argparse
+import sys
+
+def create_primer_tsv(primers, output):
+    print("Building the primer TSV file...")
+    tsvlines = primers[3] + ',' + primers[6]
+    try:
+        tsvlines.to_csv(output+".tsv", sep="\n", header=False, index=False)
+    except:
+        sys.exit("Failed to write the tsv file to disk")
+    return 0
+
+
+def create_primer_fasta(primers, output, ref):
+    print("Building the primer FASTA file...")
+    if(ref == ""):
+        ref=primers[0][0]
+    
+    primers[1] = primers[1].astype("string")
+    primers[2] = primers[2].astype("string")
+    falines = ">" + primers[3] + "::" + ref + ":" + primers[1] + "-" + primers[2]
+    final = pd.concat( [falines, primers[6]], axis=1).stack().reset_index(1, drop=True).to_frame('C').rename(index='CC{}'.format)
+    try:
+        final.to_csv(output+".primer.fasta", sep="\n", header=False, index=False)
+    except:
+        sys.exit("Failed to write the FASTA file to disk")
+    return 0
+
+
+def create_primer_insert_bed(primers, output, ref, psep, npos, spos):
+    print("Building the primer inserts BED file")
+    if(ref == ""):
+        ref=primers[0][0]
+    if(spos < npos):
+        sys.exit("Error: the primer side is before the primer number. The sorting procedure depends on the primer numbers coming before")
+    print("Creating the inserts BED file. The script assumes that primer number always comes before the primer side, that the side is defined as LEFT or RIGHT and that any other information between name, number and side is static")
+    primers = primers.sort_values(primers.columns[3])
+    isfirst = True
+    finallist = []
+    for i, row in primers.iterrows():
+        pnum = row[3].split("_")[npos]
+        pside = row[3].split("_")[spos]
+        if isfirst:
+            first = [ row[1], row[2], row[3], row[4], row[5], pnum, pside ]
+            isfirst = False
+        else:
+            fragstart=first[1]
+            fragend=row[1]
+            tmp = row[3].split(psep)[0:npos]
+            basename = "_".join(tmp) 
+            fragname = basename + "_INSERT_" + row[3].split(psep)[npos]
+            finallist.append([ ref, fragstart, fragend, fragname, row[4], row[5] ])
+            final = pd.DataFrame(finallist)
+            isfirst = True
+    try:
+        final.to_csv(output+".insert.bed", sep="\t", header=False, index=False)
+    except:
+        sys.exit("Failed to write the insert BED file to disk")
+    return 0
+
+
+# Script
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='fetch the primers positions on the reference',
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--primerfile', required=True, type=str, help='the file containing the list of primers')
+    parser.add_argument('--output', required=True, type=str, help='the name of the output file')
+    parser.add_argument('--change_ref', required=False, type=str, default="", help='The string to use as reference, in case the primer file uses a different reference name')
+    parser.add_argument('--primer_name_sep', required=False, type=str, default="_", help='The separator used between elements of the primer name')
+    parser.add_argument('primer_number_pos', required=True, type=str, help='Position of the primer number in the primer name. 0-based')
+    parser.add_argument('primer_side_pos', required=True, type=str, help='Position of the primer number in the primer name. 0-based')
+
+    args = parser.parse_args()
+
+    print("This script assumes the primerfile to be a tab-delimited BED with 7 columns: reference, start, end, name, score, strand, sequence")
+    primers = pd.read_csv(args.primerfile, sep='\t', header=None)
+    create_primer_tsv(primers, args.output)
+    create_primer_fasta(primers, args.output, args.change_ref)
+    create_primer_insert_bed(primers, args.output, args.change_ref, args.primer_name_sep, args.primer_number_pos, args.primer_side_pos)
