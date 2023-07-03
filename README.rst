@@ -142,6 +142,10 @@ predict_num_reads
 -----------------
 Predict number of reads after quality preprocessing. 
 
+prepare_primers
+---------------
+Starting with a primers BED file, generate the other files used by V-pipe (inserts BED file, and TSV and FASTA file of primers sequences)
+
 remove_gaps_msa
 ---------------
 Given a multiple sequence alignment, remove loci with a gap fraction above a certain threshold.

@@ -3,6 +3,10 @@ from pathlib import PurePath
 
 
 def run_prepare_primers(datapath, tmp_path, combin):
+    # run params
+    infile = datapath / f'{combin}.bed' # input parameter
+    outparam = tmp_path / combin # output parameter
+    # files
     exptsv = datapath / f"{combin}.tsv"  # expected
     outtsv = tmp_path / f"{combin}.tsv"  # current
     expfa = datapath / f"{combin}.primer.fasta"  # expected
@@ -13,12 +17,12 @@ def run_prepare_primers(datapath, tmp_path, combin):
     subprocess.check_call(
         [
             "prepare_primers",
-            f"--primerfile={datapath / f'{combin}.cram'}",
+            f"--primerfile={infile}",
             "--change_ref=NC_045512.2",
             "--primer_name_sep=_",
             "--primer_number_pos=2",
             "--primer_side_pos=3",
-            f"--output={combin}",
+            f"--output={outparam}",
         ]
     )
 

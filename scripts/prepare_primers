@@ -51,6 +51,9 @@ def create_primer_insert_bed(primers, output, ref, psep, npos, spos):
     isfirst = True
     finallist = []
     for i, row in primers.iterrows():
+        # skip empty lines, and headers/comments
+        if not row[3] or not row[1] or row[1][0] == '#':
+            continue
         pnum = row[3].split("_")[npos]
         pside = row[3].split("_")[spos]
         if isfirst:
@@ -80,8 +83,8 @@ if __name__ == '__main__':
     parser.add_argument('--output', required=True, type=str, help='the name of the output file')
     parser.add_argument('--change_ref', required=False, type=str, default="", help='The string to use as reference, in case the primer file uses a different reference name')
     parser.add_argument('--primer_name_sep', required=False, type=str, default="_", help='The separator used between elements of the primer name')
-    parser.add_argument('primer_number_pos', required=True, type=str, help='Position of the primer number in the primer name. 0-based')
-    parser.add_argument('primer_side_pos', required=True, type=str, help='Position of the primer number in the primer name. 0-based')
+    parser.add_argument('--primer_number_pos', required=True, type=int, help='Position of element with the primer number in the primer name. 0-based')
+    parser.add_argument('--primer_side_pos', required=True, type=int, help='Position of element with the primer side in the primer name. 0-based')
 
     args = parser.parse_args()
 
