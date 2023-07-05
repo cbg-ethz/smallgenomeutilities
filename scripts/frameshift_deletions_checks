@@ -491,6 +491,132 @@ def align(reference, consensus):
 # static re: only compile it once
 align.rx_only_n=re.compile("^[Nn]+$")
 
+def align_with_chain(reference, consensus, chain):
+    """
+    use a .chain file produced by the consensus caller:
+    - this doesn't rely on an external aligner
+      - avoids corner cases (e.g. whole N consensus breaks MAFFT)
+      - less dependencies
+    - consensus caller knows in advance
+      - where it put insertions
+      - where it put deletions (if not marking them, e.g., `bcftools --mark-dels ')
+
+    Format documentation: https://genome.ucsc.edu/goldenPath/help/chain.html
+    Code inspiration : https://github.com/liguowang/CrossMap/blob/master/lib/cmmodule/utils.py#L265
+    """
+    from Bio.Seq import Seq
+    from Bio.SeqRecord import SeqRecord
+    from Bio.Align import MultipleSeqAlignment
+
+
+    all_align = []
+
+    # dictionary with each fragment from both reference and samples' consensus
+    refs = SeqIO.to_dict(SeqIO.parse(reference, "fasta"))
+    cons = SeqIO.to_dict(SeqIO.parse(consensus, "fasta"))
+
+    # and now process the .chain
+    with open(chain, "rt") as f:
+        for l in f:
+            l = l.strip()
+            if not l or l.startswith('#'):
+                continue
+
+            t = l.split()
+            if t[0] == 'chain' and len(t) in [12, 13]:
+                # Example: chain 4900 chrY 58368225 + 25985403 25985638 chr5 151006098 - 43257292 43257528 1
+
+                # score = int(t[1]) # Alignment score
+                # chain_id = None if len(t) == 12 else t[12]
+
+                # reference:
+                r_name = t[2]      # E.g. chrY
+                r_size = int(t[3]) # Full length of the chromosome
+                r_strand = t[4]	   # Must be +
+                if r_strand != '+':
+                    raise Exception(f"Source strand in a chain file must be +. ({l})")
+                r_start = int(t[5]) # Start of source region
+                r_end = int(t[6])  # End of source region
+
+                # consensus:
+                c_name = t[7]       # E.g. chr5
+                c_size = int(t[8])  # Full length of the chromosome
+                c_strand = t[9]    # + or -
+                c_start = int(t[10])
+                # c_end = int(t[11])
+
+                # if c_strand not in ['+', '-']:
+                #     raise Exception("Target strand must be - or +. (%s)" % line)
+                if c_strand != '+':
+                    raise Exception(f"BUG: Target strand currently only supports +. ({l})")
+                if r_name not in refs:
+                    raise Exception(f"Source <{r_name}> not found in file {reference}")
+                if c_name not in cons:
+                    raise Exception(f"Target <{r_name}> not found in file {consensus}")
+
+                ref = refs[r_name]
+                con = cons[c_name]
+
+                # handle what's before the start
+                al_ref = ref.seq[0:r_start]
+                r_pos = r_start
+
+                al_con = Seq('') if r_start <= c_start else Seq("n" * (r_start - c_start))
+                al_con +=  con.seq[ (0 if c_start <= r_start else c_start - r_start) : c_start]
+                c_pos = c_start
+
+                assert len(al_ref) == len(al_con), "internal failure: start side doesn't have the same size"
+
+            elif t[0] != 'chain' and len(t) == 3:
+                # Now read the alignment chain from the file and store it as a list (source_from, source_to) -> (target_from, target_to)
+
+                size, r_gap, c_gap = int(t[0]), int(t[1]), int(t[2])
+
+                # aligned part
+                al_ref += ref.seq[r_pos:r_pos+size]
+                al_con += con.seq[c_pos:c_pos+size]
+                r_pos += size
+                c_pos += size
+
+                if r_gap:
+                    # gap: reference with no consensus
+                    al_ref += ref.seq[r_pos:r_pos+r_gap]
+                    al_con += Seq('-' * r_gap)
+                    r_pos += r_gap
+
+                if c_gap:
+                    # gap: consensus with no reference
+                    al_ref += Seq('-' * c_gap)
+                    al_con += con.seq[c_pos:c_pos+c_gap]
+                    c_pos += c_gap
+
+                # TODO handle '-' sstrand (reverse direction of consensus)
+
+            elif t[0] != 'chain' and len(t) == 1:
+                size = int(t[0])
+
+                # aligned part
+                al_ref += ref.seq[r_pos:r_pos+size]
+                al_con += con.seq[c_pos:c_pos+size]
+
+                assert len(al_ref) == len(al_con), "internal failure: lenght god out of syn"
+
+                all_align += MultipleSeqAlignment(
+                                [
+                                    SeqRecord(al_ref, id=r_name),
+                                    SeqRecord(al_con, id=c_name),
+                                ],
+                                annotations={"tool": "chain"},
+                                column_annotations=None
+                            )
+
+            else:
+                raise Exception(f"Invalid chain format. ({l})")
+
+    return all_align
+
+
+
 def check_dels_gene_region(frameshift_deletions, region_start, region_end, position):
     """
     Check for deletions that are also in the consensus in this gene region.
