@@ -1,8 +1,23 @@
+import itertools
 import subprocess
 from pathlib import PurePath
+import pytest
 
 
-def run_frameshift_deletions_checks(datapath, tmp_path, combin):
+# test stop codons in frameshift_deletions_checks with various combination of gain/losses and insertions/deletions
+@pytest.mark.parametrize(
+    "combin",
+    (
+        f"stop{stoptype}{ ( '_with_' + variant) if variant else '' }"
+        for stoptype, variant in itertools.product(
+            ["gain", "loss"], [None, "deletions", "insertions"]
+        )
+    ),
+)
+def test_workflow(tmp_path, combin):
+    # data: its handled with LFS
+    datapath = PurePath("tests/test_frameshift_deletions_checks")
+
     exp = datapath / f"{combin}.tsv"  # expected
     out = tmp_path / f"{combin}.tsv"  # current
 
@@ -19,15 +34,3 @@ def run_frameshift_deletions_checks(datapath, tmp_path, combin):
 
     # check output
     assert [r for r in open(exp, "rt")] == [row for row in open(out, "rt")]
-
-
-def test_workflow(tmp_path):
-    # data: its handled with LFS
-    datapath = PurePath("tests/test_frameshift_deletions_checks")
-
-    # test stop codons in frameshift_deletions_checks
-    for stoptype in ["gain", "loss"]:
-        for variant in ["", "_with_deletions", "_with_insertions"]:
-            run_frameshift_deletions_checks(
-                datapath, tmp_path, f"stop{stoptype}{variant}"
-            )

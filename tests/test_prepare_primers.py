@@ -1,18 +1,22 @@
 import subprocess
 from pathlib import PurePath
+import pytest
 
 
-def run_prepare_primers(datapath, tmp_path, combin):
+@pytest.mark.parametrize("virus", ["SARS-CoV-2"])
+def test_workflow(tmp_path, virus):
+    datapath = PurePath("tests/test_prepare_primers")
+
     # run params
-    infile = datapath / f'{combin}.bed' # input parameter
-    outparam = tmp_path / combin # output parameter
+    infile = datapath / f"{virus}.bed"  # input parameter
+    outparam = tmp_path / virus  # output parameter
     # files
-    exptsv = datapath / f"{combin}.tsv"  # expected
-    outtsv = tmp_path / f"{combin}.tsv"  # current
-    expfa = datapath / f"{combin}.primer.fasta"  # expected
-    outfa = tmp_path / f"{combin}.primer.fasta"  # current
-    expbed = datapath / f"{combin}.insert.bed"  # expected
-    outbed = tmp_path / f"{combin}.insert.bed"  # current
+    exptsv = datapath / f"{virus}.tsv"  # expected
+    outtsv = tmp_path / f"{virus}.tsv"  # current
+    expfa = datapath / f"{virus}.primer.fasta"  # expected
+    outfa = tmp_path / f"{virus}.primer.fasta"  # current
+    expbed = datapath / f"{virus}.insert.bed"  # expected
+    outbed = tmp_path / f"{virus}.insert.bed"  # current
 
     subprocess.check_call(
         [
@@ -33,13 +37,3 @@ def run_prepare_primers(datapath, tmp_path, combin):
     assert [r for r in open(expfa, "rt")] == [row for row in open(outfa, "rt")]
     print("Testing inserts BED...")
     assert [r for r in open(expbed, "rt")] == [row for row in open(outbed, "rt")]
-
-
-def test_workflow(tmp_path):
-    # data: its handled with LFS
-    datapath = PurePath("tests/test_prepare_primers")
-
-    # test stop codons in frameshift_deletions_checks
-    run_prepare_primers(
-                datapath, tmp_path, "SARS-CoV-2"
-            )
