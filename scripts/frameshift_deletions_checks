@@ -485,13 +485,13 @@ def align(reference, consensus):
 
     # Write the aligned fasta consensus to disk in the same position as the original unaligned input consensus
     # all_align will always have the structure: [reference, seq, ...], so we need to slice only the elements at odd indexes
-    SeqIO.write(align_casepreserved[1::2], consensus.replace(".fasta", "_aligned.fasta"), "fasta")
+    SeqIO.write(align_casepreserved[1::2], str(consensus).replace(".fasta", "_aligned.fasta"), "fasta")
 
     return all_align
 # static re: only compile it once
 align.rx_only_n=re.compile("^[Nn]+$")
 
-def align_with_chain(reference, consensus, chain):
+def align_with_chain(reference, consensus, chain, keepcase = False):
     """
     use a .chain file produced by the consensus caller:
     - this doesn't rely on an external aligner
@@ -515,6 +515,7 @@ def align_with_chain(reference, consensus, chain):
     refs = SeqIO.to_dict(SeqIO.parse(reference, "fasta"))
     cons = SeqIO.to_dict(SeqIO.parse(consensus, "fasta"))
 
+    ref = con = r_pos = c_pos = None
     # and now process the .chain
     with open(chain, "rt") as f:
         for l in f:
@@ -543,7 +544,7 @@ def align_with_chain(reference, consensus, chain):
                 c_size = int(t[8])  # Full length of the chromosome
                 c_strand = t[9]    # + or -
                 c_start = int(t[10])
-                # c_end = int(t[11])
+                c_end = int(t[11])
 
                 # if c_strand not in ['+', '-']:
                 #     raise Exception("Target strand must be - or +. (%s)" % line)
@@ -566,6 +567,9 @@ def align_with_chain(reference, consensus, chain):
                 c_pos = c_start
 
                 assert len(al_ref) == len(al_con), "internal failure: start side doesn't have the same size"
+
+            elif t[0] != 'chain' and (r_pos is None or c_pos is None):
+                raise Exception(f"No header line (chain ...) before line with chain details ({l})")
 
             elif t[0] != 'chain' and len(t) == 3:
                 # Now read the alignment chain from the file and store it as a list (source_from, source_to) -> (target_from, target_to)
@@ -601,14 +605,22 @@ def align_with_chain(reference, consensus, chain):
 
                 assert len(al_ref) == len(al_con), "internal failure: lenght god out of syn"
 
+                r_pos += size
+                c_pos += size
+
+                assert r_pos == r_end, f"internal failure: didn't consume reference to end ({r_pos} != {r_end})"
+                assert c_pos == c_end, f"internal failure: didn't consume consensus to end ({c_pos} != {c_end})"
+
                 all_align += MultipleSeqAlignment(
                                 [
-                                    SeqRecord(al_ref, id=r_name),
-                                    SeqRecord(al_con, id=c_name),
+                                    SeqRecord(al_ref if keepcase else al_ref.lower(), id=r_name),
+                                    SeqRecord(al_con if keepcase else al_con.lower(), id=c_name),
                                 ],
                                 annotations={"tool": "chain"},
                                 column_annotations=None
                             )
+
+                ref = con = r_pos = c_pos = None
 
             else:
                 raise Exception(f"Invalid chain format. ({l})")
