@@ -1,4 +1,5 @@
 import itertools
+import difflib
 import subprocess
 from pathlib import PurePath
 import pytest
@@ -64,6 +65,29 @@ def bioaln2dic(aln):
     }
 
 
+# corner cases: sometimes MAFFT produces alignment gaps that differ from what
+# bcftools writes in the consensus and/or declares in .chain files.
+# (e.g.: bcftools prefers codon-aligned deletions in consensus, whereas
+# mafft re-shifts them left-most)
+# Expected differences are expressed as difflib opcodes.
+align_expect_diffs = {
+    "stopgain_with_insertions": {
+        #    24120     24130     24140     24150
+        #      . | .  :  . |.  .| .  :  . |.  .|
+        # chain: caaaagtttaacggcct------tttgccac
+        #                        -     +
+        # mafft: caaaagtttaacggcc------ttttgccac
+        #                   \_/\_/\_/\_/\_/
+        "1-con-NC_045512.2": [
+            ("equal", 0, 24135, 0, 24135),
+            ("delete", 24135, 24136, 24135, 24135),
+            ("equal", 24136, 24145, 24135, 24144),
+            ("replace", 24145, 29905, 24144, 29905),
+        ],
+    },
+}
+
+
 @pytest.mark.parametrize(
     "combin",
     stop_combinations,
@@ -78,4 +102,27 @@ def test_align(combin):
     with_chain = frameshift_deletions_checks.align_with_chain(ref, con, chn)
     with_mafft = frameshift_deletions_checks.align(ref, str(con))
 
-    assert bioaln2dic(with_chain) == bioaln2dic(with_mafft)
+    with_chain_dict = bioaln2dic(with_chain)
+    with_mafft_dict = bioaln2dic(with_mafft)
+
+    combin_diffs = align_expect_diffs.get(combin)
+    if combin_diffs is None:
+        # normal compare
+        assert with_chain_dict == with_mafft_dict
+
+    else:
+        # handle corner cases
+        assert set(with_chain_dict.keys()) == set(with_mafft_dict.keys())
+        for k in with_chain_dict.keys():
+            expect_diff = combin_diffs.get(k)
+
+            if expect_diff is None:
+                # normal match
+                assert with_chain_dict[k] == with_mafft_dict[k]
+            else:
+                # expected not to match,
+                # check if the *differences* are expected
+                observed_diff = difflib.SequenceMatcher(
+                    a=with_chain_dict[k], b=with_mafft_dict[k]
+                ).get_opcodes()
+                assert expect_diff == observed_diff
