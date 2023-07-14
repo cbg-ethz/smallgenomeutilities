@@ -290,7 +290,7 @@ def list_all_stops(aligned_seqs, cds_positions, orf1ab_name):
        #TODO: add the option to provide a different stop codon table: https://biopython.org/docs/1.75/api/Bio.Seq.html#Bio.Seq.Seq.translate. See below for a second step that needs adaptation
        translated_cds = cds_sequence_for_translation.translate()
        # We are interested in the all stops we find. If it's before the last codon, it's a stopgain. If there is no stop codon at all, it's a stoploss
-       stop_found = re.finditer("\*", str(translated_cds))
+       stop_found = re.finditer(r'\*', str(translated_cds))
        stop_positions = [ m.start() for m in stop_found ]
        if len(stop_positions) == 0:
            potential_stoploss_seq = cds_sequence[len(cds_sequence)-3:len(cds_sequence)]
@@ -493,7 +493,7 @@ def align_with_mafft(reference, consensus):
 
     return all_align
 # static re: only compile it once
-align_with_mafft.rx_only_n=re.compile("^[Nn]+$")
+align_with_mafft.rx_only_n=re.compile(r'^[Nn]+$')
 
 def align_with_chain(reference, consensus, chain, keepcase = False):
     """
