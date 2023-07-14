@@ -50,6 +50,7 @@ def test_workflow(tmp_path, combin):
             f"--input={datapath / f'{combin}.cram'}",
             f"--consensus={datapath / f'{combin}.fasta'}",
             f"--reference={datapath / 'NC_045512.2.fasta'}",
+            f"--chain={datapath / f'{combin}.chain'}",
             f"--genes={datapath / 'Genes_NC_045512.2.GFF3'}",
             f"--output={out}",
         ]
@@ -100,7 +101,7 @@ def test_align(combin):
     chn = datapath / f"{combin}.chain"
 
     with_chain = frameshift_deletions_checks.align_with_chain(ref, con, chn)
-    with_mafft = frameshift_deletions_checks.align(ref, str(con))
+    with_mafft = frameshift_deletions_checks.align_with_mafft(ref, con)
 
     with_chain_dict = bioaln2dic(with_chain)
     with_mafft_dict = bioaln2dic(with_mafft)

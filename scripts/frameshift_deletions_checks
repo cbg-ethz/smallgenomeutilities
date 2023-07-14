@@ -90,6 +90,10 @@ def parse_args():
         help="CDS ID for the full Orf1ab CDS, comprising the ribosomal shift. In the GFF this CDS should consist of 2 entries with the same CDS ID due to the partial overlap caused by the ribosomal shift at translation time"
     )
     parser.add_argument(
+        "-s", "--chain", required=False, dest='chain', type=str,
+        help="Chain file describing how the consensus is aligned to the reference (e.g. `bcftools consensus --chain ...`); If not provided, mafft will be used to align the consensus to the reference."
+    )
+    parser.add_argument(
         "-0", "--zero-based", required=False, dest='based', action='store_const', const=0, default=1,
         help="Use 0-based (python) instead of 1-based (standard) seq positions"
     )
@@ -428,7 +432,7 @@ def find_indels_in_stops(list_stops, list_dels, list_inserts):
     return list_stops, list_dels, list_inserts
             
 
-def align(reference, consensus):
+def align_with_mafft(reference, consensus):
     """
     we rely on a MAFFT alignment, in order to:
     - detect deletions in consensuses from callers that do not mark them
@@ -446,7 +450,7 @@ def align(reference, consensus):
         # TODO test to multi-segemented viruses before the next flu pandemic
         print(f"{seq_record.id} mapped to {ref_record.id}")
 
-        if (align.rx_only_n.match(str(seq_record.seq))):
+        if (align_with_mafft.rx_only_n.match(str(seq_record.seq))):
             print(f"Warning: {seq_record.id} contains only <N>s", file=sys.stderr)
             # BUG MAFFT has a bug where if such a only-<N>s sequence is given as an argument, it will generate an alignement offset by 1 bogus gap at each end:
             # > Alignment with 2 rows and 29904 columns
@@ -489,7 +493,7 @@ def align(reference, consensus):
 
     return all_align
 # static re: only compile it once
-align.rx_only_n=re.compile("^[Nn]+$")
+align_with_mafft.rx_only_n=re.compile("^[Nn]+$")
 
 def align_with_chain(reference, consensus, chain, keepcase = False):
     """
@@ -780,7 +784,7 @@ def analyse_position(bamfile, reference, ref_id, position, stop_specific, gap_le
 
     idx_pos = np.where(variation_info.pos==position)
     if(idx_pos[0].size==0):
-        # see MAFFT's BUG mentionned in align()
+        # see MAFFT's BUG mentionned in align_with_mafft()
         print(f"Warning no read mapping to {ref_id}:{position}:+{gap_length}", file=sys.stderr)
         return { } # empty dict
 
@@ -906,6 +910,7 @@ def main():
     bamfile = args.bamfile	    # e.g.: 'REF_aln_410130_171220eg29_H5.bam'
     reference = args.reference	# e.g.: '../references/NC_045512.2.fasta'
     consensus = args.ref_majority_dels	# e.g.: 'ref_majority_dels.fasta'
+    chain = args.chain
     orf1ab_name = args.orf1ab # e.g.: 'cds-YP_009724389.1'
     based = args.based # e.g.: 1
 
@@ -924,7 +929,8 @@ def main():
                                 'homopolymeric','ref_base','cons_id'))
 
 
-    align_seqs = align(reference, consensus)
+    # use mafft if no chain is provided
+    align_seqs = align_with_chain(reference, consensus, chain, keepcase = False) if chain else align_with_mafft(reference, consensus)
     if (len(align_seqs)==0):
         print("Warning: no usable alignment", file=sys.stderr)
     elif (len(align_seqs)%2!=0):
