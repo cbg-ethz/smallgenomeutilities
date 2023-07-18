@@ -66,6 +66,30 @@ def bioaln2dic(aln):
     }
 
 
+@pytest.mark.parametrize(
+    "combin",
+    stop_combinations,
+)
+def test_mark_del(combin):
+    datapath = PurePath("tests/test_frameshift_deletions_checks")
+
+    ref = datapath / "NC_045512.2.fasta"
+    # gaps marked as '-' in the consensus
+    con_gap = datapath / f"{combin}.fasta"
+    chn_gap = datapath / f"{combin}.chain"
+    # gaps not marked. listed in chain file instead
+    con_ngp = datapath / f"{combin}_nogap.fasta"
+    chn_ngp = datapath / f"{combin}_nogap.chain"
+
+    with_chain = frameshift_deletions_checks.align_with_chain(ref, con_gap, chn_gap)
+    with_nogap = frameshift_deletions_checks.align_with_chain(ref, con_ngp, chn_ngp)
+
+    with_chain_dict = bioaln2dic(with_chain)
+    with_nogap_dict = bioaln2dic(with_nogap)
+
+    assert with_chain_dict == with_nogap_dict
+
+
 # corner cases: sometimes MAFFT produces alignment gaps that differ from what
 # bcftools writes in the consensus and/or declares in .chain files.
 # (e.g.: bcftools prefers codon-aligned deletions in consensus, whereas
