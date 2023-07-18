@@ -68,7 +68,15 @@ def bioaln2dic(aln):
 
 @pytest.mark.parametrize(
     "combin",
-    stop_combinations,
+    [
+        pytest.param(
+            c,
+            marks=pytest.mark.xfail(reason="bcftools issue #1963: inconsistant output"),
+        )
+        if "stopgain_with_insertions" == c
+        else c
+        for c in stop_combinations
+    ],
 )
 def test_mark_del(combin):
     datapath = PurePath("tests/test_frameshift_deletions_checks")
