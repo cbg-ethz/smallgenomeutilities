@@ -28,6 +28,18 @@ jobs:
         lfs: false
         # NOTE to save on bandwidth costs, GitHub Action will not use GitHub's own LFS
 
+    - name: Fetch test-data
+      # NOTE to save on bandwidth costs, pull data from BSSE's GitLab LFS instead
+      run: |
+        git config --file .lfsconfig lfs.url "https://git.bsse.ethz.ch/cbg/viruses/smallgenomeutilities.git/info/lfs"
+        git lfs install
+        git lfs pull
+        git lfs checkout
+
+    - name: Git archive
+      run: |
+        git archive --format=tar --prefix='smgu/' HEAD | (cd /tmp; tar xf -)
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -40,14 +52,14 @@ jobs:
         build
         --user
 
-    - name: Build a binary wheel and a source tarball
+    - name: Build a binary wheel and a source tarball from the Git archive
       run: >-
         python3 -m
         build
         --sdist
         --wheel
         --outdir dist/
-        .
+        /tmp/smgu/
 
     - name: Archive distributions 📦
       uses: actions/upload-artifact@v3
