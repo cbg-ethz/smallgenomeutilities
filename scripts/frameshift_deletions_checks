@@ -754,9 +754,6 @@ def write_english_summary(df_temp):
         text_row='; '.join([s for s in [support_status, homopolymeric_status, pos_critical_status] if s])
         variant_diagnosis.append(text_row)
 
-    df_temp.pop('stop_mismatches')
-    df_temp.pop('aa_position')
-    df_temp.pop('stoploss_nt')
     df_temp['variant_position_english']=variant_position_english
     df_temp['variant_diagnosis']=variant_diagnosis
     return df_temp
@@ -977,6 +974,10 @@ def main():
     if args.english==True:
         print("adding english language")
         df= write_english_summary(df)
+    # cleanup of internal stop codon information
+    df.pop('stop_mismatches')
+    df.pop('aa_position')
+    df.pop('stoploss_nt')
 
 
     df.to_csv(args.outfile, sep='\t') # write to tsv-file
