@@ -145,6 +145,9 @@ def get_cnt_matrix (alnfile, reference_name, alpha='ACGT-'):
             # dimers, etc.
             continue
         rlen_tot+=read.reference_end-read.reference_start
+        if read.query_sequence is None:
+            print(f"Warning: skipping read without sequence {reads}: {read.query_name}")
+            continue
         aligned_read = AlignedRead(read)
         #alignment_positions = aligned_read.get_alignment_positions()
         alignment_sequence = np.array(
