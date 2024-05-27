@@ -30,7 +30,7 @@ classifiers=[
 ]
 # NOTE keep in sync with tests/conda_testsgmu_env.yaml
 dependencies = [
-    "biopython",
+    "biopython ==1.83",
     "bcbio-gff",
     "pysam >=0.16",
     "pysamstats",
