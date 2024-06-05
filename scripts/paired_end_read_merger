@@ -327,7 +327,8 @@ def fuse_reads(argv):
         if prev is not None:
             if prev.qname == read.qname:
                 #if (read.pos > 0 and ( ('D' in read.cigarstring or 'D' in prev.cigarstring) and not 'S' in read.cigarstring and not 'S' in prev.cigarstring) ):
-                if (read.pos > 0 and  ( not 'S' in read.cigarstring and not 'S' in prev.cigarstring) ): # for properly aligned, skipping unaligned, skipping softclipping
+                #if (read.pos > 0 and  ( not 'S' in read.cigarstring and not 'S' in prev.cigarstring) ): # for properly aligned, skipping unaligned, skipping softclipping
+                if read.pos > 0 : # for properly aligned, skipping unaligned
                     fused = read_fusion(prev, read, reference, samfile.header)
                     i = i + 1
                     cl = query_len(fused.cigarstring)
