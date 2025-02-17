@@ -35,6 +35,7 @@ from Bio import SeqIO
 ####################################################################################
 ## micro-API for getting back to cigar, sequence and quelity from the list
 ####################################################################################
+
 def cigar_from_list(ll):
     cc = ""
     for l in ll:
@@ -73,6 +74,7 @@ def qual_from_list(ll):
 ####################################################################################
 ## "microAPI" to operate on the lists of tuples from get_aligned_pairs()
 ####################################################################################
+
 def get_Max_APlist(ll):
     m = 0
     for l in ll:
@@ -161,6 +163,11 @@ def get_num_inserts(ll):
         i = i + 1
     return (out)
 
+#  get last valid position
+def get_last_valid_pos(ll):
+    return next((i[1] for i in reversed(ll) if i[1] is not None), None) # or 'null'
+
+
 ####################################################################################
 # utlity: query length from CIGAR
 ####################################################################################
@@ -213,7 +220,7 @@ def reconcile_Overlap(r1,r2):
 
 
 ### extending the get_aligned_pairs tuples into 4-element ones, with nucleotide and quality
-def get_aligned_pairs_extended(r1):
+def get_aligned_pairs_extended_old(r1):
     llo = []
     ll1 = r1.get_aligned_pairs()
     ll = len(ll1)
@@ -230,6 +237,39 @@ def get_aligned_pairs_extended(r1):
             llo.append(i + (seq[c], qual[c]))
             c = c + 1
     return(llo)
+
+def get_aligned_pairs_extended(r1):
+    llo = []
+    ll1 = r1.get_aligned_pairs(with_cigar=True)
+    ll = len(ll1)
+    seq = r1.query_sequence
+    #cig = r1.
+    qual = r1.qual
+    c = 0
+    for ic in ll1:
+        i = (ic[0], ic[1])
+        cig = ic[2]
+        if  pysam.CSOFT_CLIP == cig:
+            # throw out soft clip
+            continue
+        if i[0] is not None and i[1] is not None:
+            llo.append( i + (seq[c], qual[c], cig))
+            c = c + 1
+        if i[0] is None:   #DEL
+            assert cig == pysam.CDEL, "Is not a deletion: {ic}"
+            llo.append(i + (None, None, cig))
+        if i[1] is None:   #INS
+            if cig == pysam.CPAD:
+                # HACK we remove PADding
+                # TODO support PAD for Viloca
+                continue
+            else:
+                assert cig == pysam.CINS, "Is not a insertion: {ic}"
+            llo.append(i + (seq[c], qual[c], cig))
+            c = c + 1
+    return(llo)
+
+
 
 def normalize_tuples_nr(ll):
     out = []
@@ -272,34 +312,43 @@ def read_fusion(r1, r2, refseq, header):
     #gs = r1.pos + r1.query_alignment_length  # problem with soft clipping
     ## FIX
     ll1 = get_aligned_pairs_extended(r1)
+    ll2 = get_aligned_pairs_extended(r2)
     num_inserts = get_num_inserts(ll1)
+    # TODO get gap position from tupples instead
     gs = r1.pos + r1.query_alignment_length - num_inserts
+    assert gs == get_last_valid_pos(ll1) + 1, f"Different gap starts: {gs} ({r1.pos} + {r1.query_alignment_length} - {num_inserts}) vs {get_last_valid_pos(ll1) + 1}\n{ll1}"
 
     # ge - the base before the R2
     ge = r2.pos - 1
     print("R1: " + r1.qname)
     print("gap start and end: " + str(gs) + " " + str(ge))
+    rst1 = get_Min_APlist(ll1)
+    rst2 = get_Min_APlist(ll2)
+    if (rst1 < rst2):    # checking the beginnings of lists
+        if (ge - gs) == -1:  # no gap in fact, ends meet
+            outr.cigarstring = r1.cigarstring + r2.cigarstring
+            outr.seq = r1.seq + r2.seq
+            outr.qual = r1.qual + r2.qual
+        else:
+            #if (ge - gs) <= 0:  # when no gap, but an overlap
+            if (ge - gs) < -1:  # when no gap, but an overlap
+                zz = get_overlap(r1, r2)
+                outr.cigarstring = cigar_from_list(zz)
+                outr.seq = seq_from_list(zz)
+                outr.qual = qual_from_list(zz)
+                restlen = r2.query_alignment_length - gs + ge
+                print(len(outr.seq), len(r1.seq), len(r2.seq[(len(r2.seq) - restlen - 1):]), len(outr.seq))
+            else: # proper gap
+                #outr.cigarstring = str(outr.template_length) + "M"  #obvious cheating  ## FIX IT !!!
+                outr.cigarstring = r1.cigarstring + str(ge - gs + 1) + "M" + r2.cigarstring
+                padder = str(refseq[gs:(ge+1)].seq)
+                outr.seq = r1.seq + padder + r2.seq
+                padder = "F" * (ge - gs + 1)
+                outr.qual = r1.qual + padder + r2.qual
+    else: # p2.pos comes for strange reasons before p1.pos
+        r1.flag = 0
+        outr = r1   # brutally returning just R1, likely soft clipping seriously trimmed
 
-    if (ge - gs) == -1:  # no gap in fact, ends meet
-        outr.cigarstring = r1.cigarstring + r2.cigarstring  # can we do this way?
-        outr.seq = r1.seq + r2.seq
-        outr.qual = r1.qual + r2.qual
-    else:
-        #if (ge - gs) <= 0:  # when no gap, but an overlap
-        if (ge - gs) < -1:  # when no gap, but an overlap
-            zz = get_overlap(r1, r2)
-            outr.cigarstring = cigar_from_list(zz)
-            outr.seq = seq_from_list(zz)
-            outr.qual = qual_from_list(zz)
-            restlen = r2.query_alignment_length - gs + ge
-            print(len(outr.seq), len(r1.seq), len(r2.seq[(len(r2.seq) - restlen - 1):]), len(outr.seq))
-        else: # proper gap
-            #outr.cigarstring = str(outr.template_length) + "M"  #obvious cheating  ## FIX IT !!!
-            outr.cigarstring = r1.cigarstring + str(ge - gs + 1) + "M" + r2.cigarstring
-            padder = str(refseq[gs:(ge+1)].seq)
-            outr.seq = r1.seq + padder + r2.seq
-            padder = "F" * (ge - gs + 1)
-            outr.qual = r1.qual + padder + r2.qual
     outr.mapping_quality = min(r1.mapping_quality, r2.mapping_quality)
     outr.next_reference_name = "*"
     outr.next_reference_start = 0
@@ -315,13 +364,15 @@ def fuse_reads(argv):
     fname_sam_nonfused =  argv[3]
     fname_ref = argv[4]
     #fname = argv
-    print("start processing "+fname)
+    print(f"start processing {fname}")
     samfile = pysam.AlignmentFile(fname, "r")
     sam_out = pysam.Samfile(fname_sam_fused, "w", header=samfile.header)
     #sam_out_nonfused = pysam.Samfile(fname_sam_nonfused, "w", header=samfile.header)
 
     prev = None
     i = 0
+    ooo = 0
+    unal = 0
     reference = next(SeqIO.parse(fname_ref, "fasta"))
     for read in samfile.fetch():
         if prev is not None:
@@ -338,8 +389,21 @@ def fuse_reads(argv):
                     sam_out.write(fused)
                     #sam_out_nonfused.write(prev)
                     #sam_out_nonfused.write(read)
+                else:
+                    print(f"read pair {prev.qname} is unaligned")
+                    unal += 1
+                # we processed that pair, find the next pair
+                prev = None
+                continue
+            else:
+               print(f"read {prev.qname} followed by {read.qname}")
+               ooo += 1
         prev = read
-    print("Finished fusion "+str(i)+" pairs fused")
+    print(f"Finished fusion {i} pairs fused")
+    if ooo:
+        printf(f"Warning {ooo} reads not grouped in pairs (not sorted alphabetically by name)")
+    if ooo:
+        printf(f"Warning {unal} reads not aligned")
 
 if __name__ == "__main__":
     fuse_reads(sys.argv)
