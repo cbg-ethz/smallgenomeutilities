@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+
+# Chrom Size:
+# if indexed:
+# - cut -f1-2 resources/sars-cov-2/NC_045512.2.fasta.fai
+# if computing:
+# - chromsize --fasta resources/sars-cov-2/NC_045512.2.fasta --output work-test/chrom.size + sed -E 's@^([^ ]+)[^\t]+@\1@g'
+#   (from here https://github.com/alejandrogzi/chromsize)
+# - bioawk -c fastx '{ print $name, length($seq) }' resources/sars-cov-2/NC_045512.2.fasta
+# - seqkit fx2tab --length --name --header-line  foo.fasta
+# - infoseq -auto -nocolumns -delimiter ',' -only -noheading -name -length sequences.fa
+#   (from emboss)
+#
+# coverage TSV:
+# - samtools depth -a -d 0 -J <bam>
+import os
+import sys
+import argparse
+import yaml
+import json
+import pandas as pd
+
+
+def get_chrom_size(fname):
+    return pd.read_csv(
+        fname,
+        sep="\t",
+        header=None,
+        names=["ref", "count"],
+        index_col="ref",
+    )["count"]
+
+
+def get_depth_QC(fname, depths=[5, 10, 15, 20, 30, 40, 50], chrom_size=None, name=None):
+    covdf = pd.read_csv(fname, sep="\t", index_col=["ref", "pos"])
+    if name is None:
+        name = covdf.columns[0]
+    cmb = pd.concat(
+        [
+            covdf[covdf > t]
+            .groupby("ref")
+            .count()
+            .rename(columns={covdf.columns[0]: str(t)})
+            .transpose()
+            for t in depths
+        ]
+    )
+    if chrom_size is not None:
+        cmb /= chrom_size
+    # cmb.to_json(orient="columns")
+    return (name, cmb.to_dict(orient="dict"))
+
+
+def parse_args():
+    """Set up the parsing of command-line arguments"""
+    parser = argparse.ArgumentParser(
+        description="Computes 'fraction of genome covered a depth' QC metrics from coverage TSV files (made by aln2basecnt, samtools depth, etc.)",
+        epilog="input TSVs support compression",
+    )
+    parser.add_argument(
+        "-f",
+        "--fract",
+        metavar="CHROM.SIZE",
+        required=False,
+        default=None,
+        type=str,
+        dest="chrsizename",
+        help="uses reference size table (made by chromsize, bioawk, seqkit, fasta indexing, etc.) to compute relative instead of absolute",
+    )
+    parser.add_argument(
+        "-d",
+        "--depth",
+        metavar="DEPTH",
+        required=False,
+        nargs="+",
+        action="append",
+        type=str,
+        dest="depths",
+        help="depths at wich to computer ther percentage of genome covered",
+    )
+    parser.add_argument(
+        "-n",
+        "--names",
+        metavar="DEPTH",
+        required=False,
+        nargs="+",
+        action="append",
+        type=str,
+        dest="names",
+        help="name to use for each TSV file (by default extract from the TSV column)",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        metavar="YAML/JSON",
+        required=False,
+        type=str,
+        dest="output",
+        help="file to write stats to",
+    )
+    parser.add_argument("FILE", nargs="+", metavar="TSV", help="coverage TSV file")
+
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+
+    if args.names is None:
+        names = [None] * len(args.FILE)
+    else:
+        names = [s for l in args.names for d in l for s in d.split(",")]
+        assert len(names) == len(
+            list(set(names))
+        ), f"Some names are duplicates: { [ n for n in list(set(names)) if names.count(n) > 1 ] }"
+        assert len(names) == len(
+            args.FILE
+        ), f"There must be as many names as files. Got { len(names) } names and { len(args.FILE) } files"
+
+    depths = (
+        [5, 10, 15, 20, 30, 40, 50]
+        if (args.depths is None)
+        else [int(s) for l in args.depths for d in l for s in d.split(",")]
+    )
+    chrom_size = get_chrom_size(args.chrsizename) if args.chrsizename else None
+
+    out = {}
+    for name, fname in zip(names, args.FILE):
+        print(fname, file=sys.stderr)
+        (rname, res) = get_depth_QC(
+            fname=fname, depths=depths, chrom_size=chrom_size, name=name
+        )
+        if name is None:
+            assert rname not in out, f"Two TSV have the same name: { rname }"
+            name = rname
+        out[name] = res
+
+    if not args.output or args.output == "-":
+        print(out)
+        return 0
+
+    # detect format
+    ext = os.path.splitext(args.output)[1]
+    if ext == ".yaml":
+        with open(args.output, "w") as yf:
+            print(yaml.dump(out), file=yf)
+    else:
+        with open(args.output, "w") as jf:
+            json.dump(out, fp=jf)
+    return 0
+
+
+if __name__ == "__main__":
+    main()

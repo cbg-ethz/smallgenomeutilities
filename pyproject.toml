@@ -61,6 +61,7 @@ script-files = [
     "scripts/convert_reference",
     "scripts/coverage",
     "scripts/coverage_stats",
+    "scripts/coverage_depth_qc",
     "scripts/extract_consensus",
     "scripts/extract_coverage_intervals",
     "scripts/extract_sam",
