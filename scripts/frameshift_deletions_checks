@@ -485,7 +485,7 @@ def align_with_mafft(reference, consensus):
             return_code = child_process.returncode
 
             if return_code:
-                raise ApplicationError(return_code, mafft_cline, stdout, stderr)
+                raise Exception(return_code, mafft_cline, stdout, stderr)
 
             if (len(stderr)>0):
                 print(mafft_cline, ":", file=sys.stderr)
