@@ -88,6 +88,10 @@ coverage
 --------
 Calculate average coverage for a target region on a different contig.
 
+coverage_depth_qc
+---------------
+Computes 'fraction of genome covered a depth' QC metrics from coverage TSV files (made by aln2basecnt, samtools depth, etc.)
+
 coverage_stats
 --------------
 Calculate average coverage for a target region of an alignment.
