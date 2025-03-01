@@ -22,7 +22,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         lfs: false
         # NOTE to save on bandwidth costs, GitHub Action will not use GitHub's own LFS
@@ -40,7 +40,7 @@ jobs:
         git archive --format=tar --prefix='smgu/' HEAD | (cd /tmp; tar xf -)
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: "3.x"
 
@@ -61,14 +61,14 @@ jobs:
         /tmp/smgu/
 
     - name: Archive distributions 📦
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: dist
         path: |
           dist
 
     - name: Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       if: startsWith(github.ref, 'refs/tags/')
       with:
         draft: true
