@@ -189,8 +189,8 @@ def check_indels_gene_region(gene_reg_load_variation, curr_pos, gap_length, inde
     # - we will not list the insert *itself*
     # - we *will* list overlapping *deletions* on other reads.
     # And vice-versa for deletions.
-    critical_inserts = [indel_pos[i]+based for i,x in enumerate(inserts) if (x > 0.4*reads_all[i]) and (indel_type=='deletion' or indel_pos[i]!=curr_pos)]
-    critical_dels = [indel_pos[i]+based for i,x in enumerate(dels) if (x > 0.4*reads_all[i]) and ((indel_type=='insertion') or (indel_pos[i] not in range(curr_pos, curr_pos+gap_length)))]
+    critical_inserts = [ int(indel_pos[i]+based) for i,x in enumerate(inserts) if (x > 0.4*reads_all[i]) and (indel_type=='deletion' or indel_pos[i]!=curr_pos)]
+    critical_dels = [ int(indel_pos[i]+based) for i,x in enumerate(dels) if (x > 0.4*reads_all[i]) and ((indel_type=='insertion') or (indel_pos[i] not in range(curr_pos, curr_pos+gap_length)))]
     return critical_inserts, critical_dels
 
 def ranges(nums):
