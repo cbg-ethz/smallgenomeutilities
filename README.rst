@@ -142,6 +142,10 @@ pair_sequences
 --------------
 Compare sequences from a multiple sequence alignment from transmitter and recipient samples in order to determine the optimal matching of transmitters to recipients.
 
+paired_end_read_merger
+--------------
+Merge paired-end reads to one merged read based on alignment.
+
 predict_num_reads
 -----------------
 Predict number of reads after quality preprocessing. 
@@ -156,14 +160,29 @@ Given a multiple sequence alignment, remove loci with a gap fraction above a cer
 
 
 *************
+Citation
+*************
+
+If you use the ``paired_end_read_merger`` or the ``frameshift_deletions_checks``, please cite 
+
+Fuhrmann, L., Jablonski, K. P., Topolsky, I., Batavia, A. A., Borgsmueller, N., Icer Baykal, P., ... & Beerenwinkel, N. (2023). "V-pipe 3.0: a sustainable pipeline for within-sample viral genetic diversity estimation." , https://doi.org/10.1101/2023.10.16.562462  
+
+For all other scripts, please cite    
+
+Posada-Céspedes S., Seifert D., Topolsky I., Jablonski K.P., Metzner K.J., and Beerenwinkel N. 2021.
+"V-pipe: a computational pipeline for assessing viral genetic diversity from high-throughput sequencing data."
+_Bioinformatics_, January. https://doi.org/10.1093/bioinformatics/btab015
+
+*************
 Contributions
 *************
 
-- David Seifert	<david.seifert@bsse.ethz.ch>	|orcdseif|_	|gitdseif|_
-- Susana Posada Cespedes	<susana.posada@bsse.ethz.ch>	|orcsposa|_	|gitsposa|_
-- Ivan Blagoev Topolsky	<ivan.topolsky@sib.swiss>	|orcitopo|_	|gititopo|_
-- Lara Fuhrmann	<lara.fuhrmann@bsse.ethz.ch>	|orclfuhr|_	|gitlfuhr|_
-- Mateo Carrara	<carrara@nexus.ethz.ch>	|orcmcarr|_	|gitmcarr|_
+- David Seifert	|orcdseif|_	|gitdseif|_
+- Susana Posada Cespedes	|orcsposa|_	|gitsposa|_
+- Ivan Blagoev Topolsky	|orcitopo|_	|gititopo|_
+- Lara Fuhrmann	|orclfuhr|_	|gitlfuhr|_
+- Mateo Carrara	|orcmcarr|_	|gitmcarr|_  
+- Michal Okoniewski |orcmokn|_	|gitmokn|_  
 
 .. _orcdseif : https://orcid.org/0000-0003-4739-5110
 .. _gitdseif : https://github.com/SoapZA
@@ -175,18 +194,22 @@ Contributions
 .. _gitlfuhr : https://github.com/LaraFuhrmann
 .. _orcmcarr : https://orcid.org/0000-0002-8559-8296
 .. _gitmcarr : https://github.com/mcarrara-bioinfo
+.. _orcmokn : https://orcid.org/0000-0003-4722-4506
+.. _gitmokn : https://github.com/michalogit
 
 .. |orcdseif| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg 
 .. |orcsposa| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg 
 .. |orcitopo| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg 
 .. |orclfuhr| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg 
 .. |orcmcarr| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg 
+.. |orcmokn| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg 
 
 .. |gitdseif| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
 .. |gitsposa| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
 .. |gititopo| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
 .. |gitlfuhr| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
 .. |gitmcarr| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
+.. |gitmokn| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
 
 .. |github| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
 .. |orcid| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
