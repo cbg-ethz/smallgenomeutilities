@@ -12,7 +12,7 @@
 #
 #dependencies:
 #  - python==3.10.12
-#  - pysam==0.22.0
+#  - pysam==0.23.0
 #  - biopython==1.83
 #  - numpy==1.26.3
 #
@@ -21,6 +21,7 @@
 #
 #################
 
+import argparse
 import sys
 from itertools import groupby
 import pysam
@@ -163,6 +164,15 @@ def get_num_inserts(ll):
         i = i + 1
     return (out)
 
+def get_num_deletes(ll):
+    out = 0
+    i = 0
+    while i < len(ll):
+        if (ll[i][0] is None):
+            out = out + 1
+        i = i + 1
+    return (out)
+
 #  get last valid position
 def get_last_valid_pos(ll):
     return next((i[1] for i in reversed(ll) if i[1] is not None), None) # or 'null'
@@ -291,7 +301,7 @@ def get_overlap(r1, r2):
 # fusion function on the level of a single alignment pair
 ####################################################################################
 
-def read_fusion(r1, r2, refseq, header):
+def read_fusion(r1, r2, header):
     outr = pysam.AlignedSegment(header=header)
     str1 = r1.get_aligned_pairs()  # with_seq = True MD tag not present
     cig1 = r1.cigartuples
@@ -315,13 +325,13 @@ def read_fusion(r1, r2, refseq, header):
     ll2 = get_aligned_pairs_extended(r2)
     num_inserts = get_num_inserts(ll1)
     # TODO get gap position from tupples instead
-    gs = r1.pos + r1.query_alignment_length - num_inserts
-    assert gs == get_last_valid_pos(ll1) + 1, f"Different gap starts: {gs} ({r1.pos} + {r1.query_alignment_length} - {num_inserts}) vs {get_last_valid_pos(ll1) + 1}\n{ll1}"
+    gs = r1.pos + r1.query_alignment_length - num_inserts + get_num_deletes(ll1)
+    assert gs == get_last_valid_pos(ll1) + 1, f"Different gap starts: {gs} ({r1.pos} + {r1.query_alignment_length} - {num_inserts} + {get_num_deletes(ll1)}) vs {get_last_valid_pos(ll1) + 1}\n{ll1}"
 
     # ge - the base before the R2
     ge = r2.pos - 1
-    print("R1: " + r1.qname)
-    print("gap start and end: " + str(gs) + " " + str(ge))
+    #print("R1: " + r1.qname)
+    #print("gap start and end: " + str(gs) + " " + str(ge))
     rst1 = get_Min_APlist(ll1)
     rst2 = get_Min_APlist(ll2)
     if (rst1 < rst2):    # checking the beginnings of lists
@@ -337,13 +347,13 @@ def read_fusion(r1, r2, refseq, header):
                 outr.seq = seq_from_list(zz)
                 outr.qual = qual_from_list(zz)
                 restlen = r2.query_alignment_length - gs + ge
-                print(len(outr.seq), len(r1.seq), len(r2.seq[(len(r2.seq) - restlen - 1):]), len(outr.seq))
+                #print(len(outr.seq), len(r1.seq), len(r2.seq[(len(r2.seq) - restlen - 1):]), len(outr.seq))
             else: # proper gap
                 #outr.cigarstring = str(outr.template_length) + "M"  #obvious cheating  ## FIX IT !!!
                 outr.cigarstring = r1.cigarstring + str(ge - gs + 1) + "M" + r2.cigarstring
-                padder = str(refseq[gs:(ge+1)].seq)
+                padder = "n" * (ge - gs + 1)
                 outr.seq = r1.seq + padder + r2.seq
-                padder = "F" * (ge - gs + 1)
+                padder = "!" * (ge - gs + 1)
                 outr.qual = r1.qual + padder + r2.qual
     else: # p2.pos comes for strange reasons before p1.pos
         r1.flag = 0
@@ -353,34 +363,27 @@ def read_fusion(r1, r2, refseq, header):
     outr.next_reference_name = "*"
     outr.next_reference_start = 0
     outr.pnext = 0
-    print(r1.qname + "  " + r2.qname)
+    #print(r1.qname + "  " + r2.qname)
     #print(outr.seq)
     return outr
 
 
-def fuse_reads(argv):
-    fname = argv[1]
-    fname_sam_fused = argv[2]
-    fname_sam_nonfused =  argv[3]
-    fname_ref = argv[4]
-    #fname = argv
+def fuse_reads(fname, fname_sam_fused_output, fname_ref):
     print(f"start processing {fname}")
     samfile = pysam.AlignmentFile(fname, "r")
-    sam_out = pysam.Samfile(fname_sam_fused, "w", header=samfile.header)
-    #sam_out_nonfused = pysam.Samfile(fname_sam_nonfused, "w", header=samfile.header)
+    sam_out = pysam.Samfile(fname_sam_fused_output, "w", header=samfile.header)
 
-    prev = None
     i = 0
     ooo = 0
     unal = 0
-    reference = next(SeqIO.parse(fname_ref, "fasta"))
+    prev = None
     for read in samfile.fetch():
         if prev is not None:
             if prev.qname == read.qname:
                 #if (read.pos > 0 and ( ('D' in read.cigarstring or 'D' in prev.cigarstring) and not 'S' in read.cigarstring and not 'S' in prev.cigarstring) ):
                 #if (read.pos > 0 and  ( not 'S' in read.cigarstring and not 'S' in prev.cigarstring) ): # for properly aligned, skipping unaligned, skipping softclipping
                 if read.pos > 0 : # for properly aligned, skipping unaligned
-                    fused = read_fusion(prev, read, reference, samfile.header)
+                    fused = read_fusion(prev, read, samfile.header)
                     i = i + 1
                     cl = query_len(fused.cigarstring)
                     ql = fused.query_length
@@ -396,8 +399,8 @@ def fuse_reads(argv):
                 prev = None
                 continue
             else:
-               print(f"read {prev.qname} followed by {read.qname}")
-               ooo += 1
+                print(f"read {prev.qname} followed by {read.qname}")
+                ooo += 1
         prev = read
     print(f"Finished fusion {i} pairs fused")
     if ooo:
@@ -405,5 +408,42 @@ def fuse_reads(argv):
     if ooo:
         printf(f"Warning {unal} reads not aligned")
 
+def parse_args():
+    """Set up the parsing of command-line arguments"""
+    parser = argparse.ArgumentParser(
+        description="# Merges paired-end reads to one fused reads based on alignment.",
+        epilog="SAM file need to be sorted by QNAME (not POS) and need @SQ in header:\n"
+            "samtools view -h -T reference.fasta -t reference.fasta.fai  L001.bam > L001.sam\n"
+            "samtools sort -O sam -n L001.sam > L001.sorted.sam",
+    )
+    parser.add_argument(
+        "-f",
+        "--ref",
+        metavar="FASTA",
+        required=False,
+        default=None,
+        type=str,
+        dest="reference",
+        help="reference file used during alignment",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        metavar="SAM",
+        required=False,
+        type=str,
+        dest="output",
+        help="file to write merged read-pairs to",
+    )
+    parser.add_argument("FILE", nargs=1, metavar="SAM", help="input SAM file (sorted by QNAME)")
+
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    fuse_reads(fname = args.FILE[0], fname_sam_fused_output = args.output, fname_ref = args.reference)
+
+
 if __name__ == "__main__":
-    fuse_reads(sys.argv)
+    main()
