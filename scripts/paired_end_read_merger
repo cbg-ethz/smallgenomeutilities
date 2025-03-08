@@ -25,6 +25,8 @@ import more_itertools
 import pysam
 from Bio import SeqIO
 
+from smallgenomeutilities._version import __version__
+
 ## SAM preparation, perhaps for a separate rule in Snakemake
 ## SAM file needs a header with @SQ, thus:
 # samtools view -h -T reference.fasta -t reference.fasta.fai  L001.bam > L001.sam
@@ -330,6 +332,12 @@ def parse_args():
         epilog="SAM file need to be sorted by QNAME (not POS) and need @SQ in header:\n\n"
         "samtools view -h -T reference.fasta -t reference.fasta.fai  L001.bam > L001.sam &&\n\n"
         "samtools sort -O sam -n L001.sam > L001.sorted.sam",
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version="%(prog)s {version}".format(version=__version__),
     )
     parser.add_argument(
         "-f",
