@@ -41,6 +41,7 @@ dependencies = [
     "matplotlib",
     "progress",
     "pyyaml",
+    "more-itertools",
 ]
 
 [project.optional-dependencies]
@@ -72,6 +73,7 @@ script-files = [
     "scripts/min_coverage",
     "scripts/minority_freq",
     "scripts/pair_sequences",
+    "scripts/paired_end_read_merger",
     "scripts/predict_num_reads",
     "scripts/prepare_primers",
     "scripts/remove_gaps_msa",
