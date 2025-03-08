@@ -50,3 +50,36 @@ def test_aln2basecnt(tmp_path):
     for f in files:
         with open(exp[f], "rt") as expf, open(out[f], "rt") as outf:
             assert [r for r in expf] == [row for row in outf]
+
+
+@pytest.mark.parametrize(
+    "combin", ["stopgain_with_deletions", "stoploss", "stoploss_with_deletions"]
+)
+def test_aln2basecnt_more(tmp_path, combin):
+    # data on LFS
+    crampath = PurePath("tests/test_frameshift_deletions_checks")
+    datapath = PurePath("tests/test_aln2basecnt")
+
+    files = [f"{combin}.basecnt.tsv", f"{combin}.coverage.tsv", f"{combin}.stats.yaml"]
+    exp = {f: datapath / f for f in files}  # expected
+    out = {f: tmp_path / f for f in files}  # current
+
+    subprocess.check_call(
+        [
+            "aln2basecnt",
+            "--first",
+            "1",
+            "--basecnt",
+            out[f"{combin}.basecnt.tsv"],
+            "--coverage",
+            out[f"{combin}.coverage.tsv"],
+            "--stats",
+            out[f"{combin}.stats.yaml"],
+            crampath / f"{combin}.cram",
+        ]
+    )
+
+    # check output
+    for f in files:
+        with open(exp[f], "rt") as expf, open(out[f], "rt") as outf:
+            assert [r for r in expf] == [row for row in outf]
