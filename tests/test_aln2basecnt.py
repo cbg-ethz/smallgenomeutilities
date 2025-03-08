@@ -4,50 +4,64 @@ import json
 import pytest
 
 
-def test_aln2basecnt(tmp_path):
+@pytest.mark.parametrize(
+    "combin",
+    [
+        {"first": "1", "name": "mini", "ext": "yaml"},
+        {"first": "0", "name": "mini_merged", "ext": "ini"},
+    ],
+)
+def test_aln2basecnt(tmp_path, combin):
     # micro text with file with corner cases
     minipath = PurePath("tests/test_paired_end_read_merger")
     datapath = PurePath("tests/test_aln2basecnt")
 
     # prepare data
+    tmp_data = tmp_path / f"{combin['name']}.bam"
     subprocess.run(
         [
             "samtools",
             "sort",
             "-o",
-            tmp_path / "mini.bam",
-            minipath / "mini.sam",
+            tmp_data,
+            minipath / f"{combin['name']}.sam",
         ]
     )
     subprocess.run(
         [
             "samtools",
             "index",
-            tmp_path / "mini.bam",
+            tmp_data,
         ]
     )
 
-    files = ["mini.basecnt.tsv", "mini.coverage.tsv", "mini.stats.yaml"]
-    exp = {f: datapath / f for f in files}  # expected
-    out = {f: tmp_path / f for f in files}  # current
+    files = {
+        "bscnt": f"{combin['name']}.basecnt.tsv",
+        "cov": f"{combin['name']}.coverage.tsv",
+        "stat": f"{combin['name']}.stats.{combin['ext']}",
+    }
+    exp = {f: datapath / f for f in files.values()}  # expected
+    out = {f: tmp_path / f for f in files.values()}  # current
 
     subprocess.check_call(
         [
             "aln2basecnt",
+            "--name",
+            combin["name"],
             "--first",
-            "1",
+            combin["first"],
             "--basecnt",
-            out["mini.basecnt.tsv"],
+            out[files["bscnt"]],
             "--coverage",
-            out["mini.coverage.tsv"],
+            out[files["cov"]],
             "--stats",
-            out["mini.stats.yaml"],
-            tmp_path / "mini.bam",
+            out[files["stat"]],
+            tmp_data,
         ]
     )
 
     # check output
-    for f in files:
+    for f in files.values():
         with open(exp[f], "rt") as expf, open(out[f], "rt") as outf:
             assert [r for r in expf] == [row for row in outf]
 
@@ -60,9 +74,13 @@ def test_aln2basecnt_more(tmp_path, combin):
     crampath = PurePath("tests/test_frameshift_deletions_checks")
     datapath = PurePath("tests/test_aln2basecnt")
 
-    files = [f"{combin}.basecnt.tsv", f"{combin}.coverage.tsv", f"{combin}.stats.yaml"]
-    exp = {f: datapath / f for f in files}  # expected
-    out = {f: tmp_path / f for f in files}  # current
+    files = {
+        "bscnt": f"{combin}.basecnt.tsv",
+        "cov": f"{combin}.coverage.tsv",
+        "stat": f"{combin}.stats.yaml",
+    }
+    exp = {f: datapath / f for f in files.values()}  # expected
+    out = {f: tmp_path / f for f in files.values()}  # current
 
     subprocess.check_call(
         [
@@ -70,16 +88,16 @@ def test_aln2basecnt_more(tmp_path, combin):
             "--first",
             "1",
             "--basecnt",
-            out[f"{combin}.basecnt.tsv"],
+            out[files["bscnt"]],
             "--coverage",
-            out[f"{combin}.coverage.tsv"],
+            out[files["cov"]],
             "--stats",
-            out[f"{combin}.stats.yaml"],
+            out[files["stat"]],
             crampath / f"{combin}.cram",
         ]
     )
 
     # check output
-    for f in files:
+    for f in files.values():
         with open(exp[f], "rt") as expf, open(out[f], "rt") as outf:
             assert [r for r in expf] == [row for row in outf]
