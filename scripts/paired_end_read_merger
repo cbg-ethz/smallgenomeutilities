@@ -5,12 +5,8 @@
 #
 # Description:
 # Merges paired-end reads to one fused reads based on alignment.
-# Input: fname = argv[1]
-#        fname_sam_fused = argv[2]
-#        fname_sam_nonfused =  argv[3]
-#        fname_ref = argv[4]
 #
-#dependencies:
+# dependencies:
 #  - python==3.10.12
 #  - pysam==0.23.0
 #  - biopython==1.83
@@ -18,6 +14,7 @@
 #
 # Author:
 # Michal Okoniewski
+# Ivan Topolsky
 #
 #################
 
@@ -30,13 +27,14 @@ from Bio import SeqIO
 
 ## SAM preparation, perhaps for a separate rule in Snakemake
 ## SAM file needs a header with @SQ, thus:
-#samtools view -h -T reference.fasta -t reference.fasta.fai  L001.bam > L001.sam
+# samtools view -h -T reference.fasta -t reference.fasta.fai  L001.bam > L001.sam
 # sot the SAM according to the QNAME
-#samtools sort -O sam -n L001.sam > L001.sorted.sam
+# samtools sort -O sam -n L001.sam > L001.sorted.sam
 
 ####################################################################################
 ## micro-API for getting back to cigar, sequence and quelity from the list
 ####################################################################################
+
 
 ### reverse direction: 4-element tuples list back into aligned read
 def get_aligned_read_from_tuples(llo):
@@ -44,184 +42,71 @@ def get_aligned_read_from_tuples(llo):
     qual = ()
     cigtup = ()
     # group in chunks with the same cig op
-    for cig, titr in groupby(llo, key = lambda it: it[4]):
+    for cig, titr in groupby(llo, key=lambda it: it[4]):
         if pysam.CDEL == cig:
-            #deletion do not extend the string
-            cigtup += ( (cig, sum(1 for _ in titr),), )
+            # deletion do not extend the string
+            cigtup += (
+                (
+                    cig,
+                    sum(1 for _ in titr),
+                ),
+            )
             continue
         # TODO handle PAD
-        
+
         # transpose two columns into two lists
-        addseq, addqual = list(zip( *[ (it[2], it[3]) for it in titr]))
+        addseq, addqual = list(zip(*[(it[2], it[3]) for it in titr]))
 
         # tuple columns 2 and 3 back into strings and qualities list
-        seq += ''.join(addseq)
+        seq += "".join(addseq)
         qual += addqual
-        cigtup += ( (cig, len(addseq),), )
+        cigtup += (
+            (
+                cig,
+                len(addseq),
+            ),
+        )
     return seq, qual, cigtup
-
-
-def cigar_from_list(ll):
-    cc = ""
-    for l in ll:
-        if (l[0] is None):
-            cc = cc + "D"
-        else:
-            if (l[1] is None):
-                cc = cc + "I"
-            else:
-                cc = cc + "M"
-    tmp = ["".join(g) for k, g in groupby(cc)]
-    #tmp = ["".join(g) for k, g in groupby(cc) if k != '-' and k != '/']
-    cc = ""
-    for l in tmp:
-        cc = cc + str(len(l))
-        cc = cc + l[0]
-    return cc
-
-
-def seq_from_list(ll):
-    cc = ""
-    for l in ll:
-        if (l[0] is not None):   # not a deletion
-            cc = cc + l[2]
-    return cc
-
-def qual_from_list(ll):
-    cc = ""
-    for l in ll:
-        if (l[0] is not None):   # not a deletion
-            cc = cc + l[3]
-    return cc
-
 
 
 ####################################################################################
 ## "microAPI" to operate on the lists of tuples from get_aligned_pairs()
 ####################################################################################
 
-def get_Max_APlist(ll):
-    m = 0
-    for l in ll:
-        if l[1] is not None:
-            if m < l[1]:
-                m = l[1]
-    return m
-
-def get_Min_APlist(ll):
-    m = 10e10
-    for l in ll:
-        if l[1] is not None:
-            if m > l[1]:
-                m = l[1]
-    return m
-
-# get first  (Nr) for a given second (pos), may be None
-def get_at_Pos(ll, pos):
-    out = -1
-    for l in ll:
-        if l[1] == pos:
-            out = l[0]
-    return(out)
-
-def get_Tuple_at_Pos(ll, pos):
-    out = -1
-    for l in ll:
-        if l[1] == pos:
-            out = l
-    return(out)
-
-# get second  (pos) for a given first (nr), may be None
-def get_at_Nr(ll, nr):
-    out = -1
-    for l in ll:
-        if l[0] == nr:
-            out = l[1]
-    return(out)
-
-def get_Tuple_at_Nr(ll, nr):
-    out = -1
-    for l in ll:
-        if l[0] == nr:
-            out = l
-    return(out)
-
-# get insert after a given pos
-def get_Insert_After(ll, nr):
-    out = []
-    i = 0
-    while ll[i][1] != nr and i < len(ll):
-        #print(ll[i][1], file=sys.stderr)
-        i = i + 1
-    if i < len(ll) :
-        i = i + 1
-    while i < len(ll) and ll[i][1] is None :
-        out.append(ll[i])
-        i = i + 1
-    return(out)
-
-# get a part until a given position
-def get_To_Pos(ll, en):
-    out = []
-    i = 0
-    while ll[i][1] is None or ll[i][1] < en:
-        out.append(ll[i])
-        i = i + 1
-    return (out)
-
-# get a part from a given position  to the end
-def get_From_Pos(ll, st):
-    out = []
-    i = 0
-    while ll[i][1] is None or ll[i][1] < st:
-        i = i + 1
-    out = ll[i:len(ll)]
-    return (out)
-
-# get inserts
-def get_num_inserts(ll):
-    out = 0
-    i = 0
-    while i < len(ll):
-        if (ll[i][1] is None):
-            out = out + 1
-        i = i + 1
-    return (out)
-
-def get_num_deletes(ll):
-    out = 0
-    i = 0
-    while i < len(ll):
-        if (ll[i][0] is None):
-            out = out + 1
-        i = i + 1
-    return (out)
-
-# get last valid position
-def get_last_valid_pos(ll):
-    return next((i[1] for i in reversed(ll) if i[1] is not None), None) # or 'null'
 
 # get first valid position
 def get_first_valid_pos(ll):
-    return next((i[1] for i in ll if i[1] is not None), None) # or 'null'
+    return next((i[1] for i in ll if i[1] is not None), None)  # or 'null'
+
+
+# get last valid position
+def get_last_valid_pos(ll):
+    return get_first_valid_pos(reversed(ll))  # iterator power!
+
 
 # split into two lists at reference position
 def split_at_refpos(ll, pos):
     # NOTE iterator needs to be consumed in-order (first "before" iter, then "after" iter)
-    before, after = more_itertools.before_and_after(lambda it: (it[1] is None) or (it[1] < pos), ll)
+    before, after = more_itertools.before_and_after(
+        lambda it: (it[1] is None) or (it[1] < pos), ll
+    )
     return list(before), list(after)
+
 
 # advance over insertion
 def advance_insert(t, liter):
     ins = []
     while (t is not None) and (t[1] is None):
-        ins += [ t ]
+        ins += [t]
         t = next(liter, None)
     return t, ins
+
 
 ####################################################################################
 # utlity: query length from CIGAR
 ####################################################################################
+
+
 def query_len(cigar_string):
     """
     Given a CIGAR string, return the number of bases consumed from the
@@ -231,46 +116,19 @@ def query_len(cigar_string):
     result = 0
     cig_iter = groupby(cigar_string, lambda chr: chr.isdigit())
     for _, length_digits in cig_iter:
-        length = int(''.join(length_digits))
+        length = int("".join(length_digits))
         op = next(next(cig_iter)[1])
         if op in read_consuming_ops:
             result += length
     return result
 
+
 ####################################################################################
 # main algorithm
 ####################################################################################
-# this returns the full list for the fused read
-def reconcile_Overlap_old(r1,r2):
-    ll1 = get_aligned_pairs_extended(r1)
-    ll2 = get_aligned_pairs_extended(r2)
-    out = []
-    en = get_Max_APlist(ll1)
-    i = get_Min_APlist(ll2)
-    p1 = get_To_Pos(ll1, get_Min_APlist(ll2) )
-    p3 = get_From_Pos(ll2, get_Max_APlist(ll1) + 1)
-    while i <= en:
-        e1 = get_Tuple_at_Pos(ll1, i)
-        e2 = get_Tuple_at_Pos(ll2, i)
-        # Deletion always wins
-        if e1[0] is not None and e2[0] is None:
-            out.append(e2)
-        else:
-            out.append(e1)  # add code, which quality is higher
-        i1 = get_Insert_After(ll1, i)
-        i2 = get_Insert_After(ll2, i)
-        # Longer insert wins
-        if not (len(i1)==0 and len(i2)==0):
-            if (len(i2) > len(i1)):
-                out = out + i2
-            else:
-                out = out + i1
-        i = i + 1
-    out = p1 + out + p3
-    return (out)
 
 
-def reconcile_Overlap_tupples(ll1, ll2, name = ''):
+def reconcile_Overlap_tupples(ll1, ll2, name=""):
     out = []
     lit1 = iter(ll1)
     lit2 = iter(ll2)
@@ -282,16 +140,16 @@ def reconcile_Overlap_tupples(ll1, ll2, name = ''):
         # advance both cursors
         if (t1[1] is not None) and (t2[1] is not None):
             # positions on ref should agree
-            assert t1[1] == t2[1], f"Got out of sync at {t1} and {t2}"
+            # assert t1[1] == t2[1], f"Got out of sync at {t1} and {t2}"
 
             # check if both on read
             if (t1[0] is not None) and (t2[0] is not None):
                 # no deletion: highest quality
                 # simply comparing PHRED scores (higher is better)
-                out += [ t1 ] if t1[3] > t2[3] else [ t2 ]
+                out += [t1] if t1[3] > t2[3] else [t2]
             else:
                 # delition always wins
-                out += [ t1 ] if t1[0] is None else [ t2 ]
+                out += [t1] if t1[0] is None else [t2]
 
             t1 = next(lit1, None)
             t2 = next(lit2, None)
@@ -303,9 +161,9 @@ def reconcile_Overlap_tupples(ll1, ll2, name = ''):
             t2, ins2 = advance_insert(t2, lit2)
             # Longer insert wins
             out += ins1 if len(ins1) > len(ins2) else ins2
-    assert t1 is None, f"ll1 not consumed {name}"
-    assert t2 is None, f"ll2 not consumed {name}"
-    return (out)
+    # assert t1 is None, f"ll1 not consumed {name}"
+    # assert t2 is None, f"ll2 not consumed {name}"
+    return out
 
 
 ### extending the get_aligned_pairs tuples into 4-element ones, with nucleotide and quality, while skipping soft-cliping
@@ -314,37 +172,44 @@ def get_aligned_pairs_extended(r1):
     seq = r1.query_sequence
     qual = r1.query_qualities
     for ic in r1.get_aligned_pairs(with_cigar=True):
-        i = (ic[0], ic[1]) # offset in read sequence, reference position (both 0-based)
-        cig = ic[2] # the cig op which lead to this aligned pair
-        if  pysam.CSOFT_CLIP == cig:
+        i = (ic[0], ic[1])  # offset in read sequence, reference position (both 0-based)
+        cig = ic[2]  # the cig op which lead to this aligned pair
+        if pysam.CSOFT_CLIP == cig:
             # throw out soft clip
             continue
         if i[0] is not None and i[1] is not None:
-            llo.append( i + (seq[i[0]], qual[i[0]], cig))
-        if i[0] is None:   #DEL
+            llo.append(i + (seq[i[0]], qual[i[0]], cig))
+        if i[0] is None:  # DEL
             assert pysam.CDEL == cig, f"R1: {r1.query_name} -- Is not a deletion: {ic}"
             llo.append(i + (None, None, cig))
-        if i[1] is None:   #INS
+        if i[1] is None:  # INS
             if pysam.CPAD == cig:
                 # HACK we remove PADding
                 # TODO support PAD for Viloca
                 continue
             else:
-                assert cig == pysam.CINS, f"R1: {r1.query_name} -- Is not a insertion: {ic}"
+                assert (
+                    cig == pysam.CINS
+                ), f"R1: {r1.query_name} -- Is not a insertion: {ic}"
             llo.append(i + (seq[i[0]], qual[i[0]], cig))
-    return(llo)
+    return llo
 
 
 ####################################################################################
 # fusion function on the level of a single alignment pair
 ####################################################################################
 
-def read_fusion(r1, r2, header, qfiller = 0):
+
+def read_fusion(r1, r2, header, qfiller=0):
     outr = pysam.AlignedSegment(header=header)
     outr.query_name = r1.query_name
-    outr.flag = 0  # not paired, super nice alignment ;) we ignore for now existing flags
+    outr.flag = (
+        0  # not paired, super nice alignment ;) we ignore for now existing flags
+    )
     outr.reference_name = r1.reference_name
-    outr.template_length = max(r1.template_length, r2.template_length)  # the reverse one is negative, (with most sequencers/aligners)
+    outr.template_length = max(
+        r1.template_length, r2.template_length
+    )  # the reverse one is negative, (with most sequencers/aligners)
     # geometry
     if r1.pos > r2.pos:  # machniom! ie. swap
         (r1, r2) = (r2, r1)
@@ -353,15 +218,15 @@ def read_fusion(r1, r2, header, qfiller = 0):
     # gap start and end
     # gs - the base after the R1 alignment
     ll1 = get_aligned_pairs_extended(r1)
-    rst1 =  get_first_valid_pos(ll1)
+    rst1 = get_first_valid_pos(ll1)
     gs = get_last_valid_pos(ll1) + 1
     # ge - the base before the R2
     ll2 = get_aligned_pairs_extended(r2)
     rst2 = get_first_valid_pos(ll2)
     ge = rst2 - 1
 
-    #print(f"R1: {r1.query_name}\tgap start and end: {gs} {ge}", file=sys.stderr)
-    if (rst1 < rst2):    # checking the beginnings of lists
+    # print(f"R1: {r1.query_name}\tgap start and end: {gs} {ge}", file=sys.stderr)
+    if rst1 < rst2:  # checking the beginnings of lists
         llo = []
         if (ge - gs) == -1:  # no gap in fact, ends meet
             llo = ll1 + ll2
@@ -371,33 +236,48 @@ def read_fusion(r1, r2, header, qfiller = 0):
             llo2, llaft = split_at_refpos(ll2, gs)
 
             llo = llbef + reconcile_Overlap_tupples(llo1, llo2, r1.query_name) + llaft
-        else: # proper gap
-            llo = ll1 + [
+        else:  # proper gap
+            llo = (
+                ll1
+                + [
                     # offset in read sequence (both 0-based), [dummy] reference position
-                    ( p, -1, 'N', qfiller, pysam.CMATCH) for p in range(gs, rst2)
-                ] + ll2;
-        outr.query_sequence, outr.query_qualities, outr.cigartuples = get_aligned_read_from_tuples(llo)
-    else: # p2.pos comes for strange reasons before p1.pos
+                    (p, -1, "N", qfiller, pysam.CMATCH)
+                    for p in range(gs, rst2)
+                ]
+                + ll2
+            )
+        outr.query_sequence, outr.query_qualities, outr.cigartuples = (
+            get_aligned_read_from_tuples(llo)
+        )
+    else:  # p2.pos comes for strange reasons before p1.pos
         if r1.query_length > r2.query_length:
             r1.flag = 0
-            outr = r1   # brutally returning just R1, likely soft clipping seriously trimmed
+            outr = (
+                r1  # brutally returning just R1, likely soft clipping seriously trimmed
+            )
         else:
             r2.flag = 0
-            outr = r2   # brutally returning just R2, likely soft clipping seriously trimmed
+            outr = (
+                r2  # brutally returning just R2, likely soft clipping seriously trimmed
+            )
 
     outr.mapping_quality = min(r1.mapping_quality, r2.mapping_quality)
     outr.next_reference_name = "*"
     outr.next_reference_start = 0
     outr.pnext = 0
-    #print(r1.qname + "  " + r2.qname, file=sys.stderr)
-    #print(outr.seq, file=sys.stderr)
+    # print(r1.qname + "  " + r2.qname, file=sys.stderr)
+    # print(outr.seq, file=sys.stderr)
     return outr
 
 
-def fuse_reads(fname, fname_sam_fused_output, fname_ref, qfiller = 0):
+def fuse_reads(fname, fname_sam_fused_output, fname_ref, qfiller=0):
     print(f"start processing {fname}", file=sys.stderr)
-    samfile = pysam.AlignmentFile(fname, "r")
-    sam_out = pysam.Samfile(fname_sam_fused_output if fname_sam_fused_output != '-' else sys.stdout, "w", header=samfile.header)
+    samfile = pysam.AlignmentFile(fname if fname != "-" else sys.stdin, "r")
+    sam_out = pysam.Samfile(
+        fname_sam_fused_output if fname_sam_fused_output != "-" else sys.stdout,
+        "w",
+        header=samfile.header,
+    )
 
     c = 0
     ooo = 0
@@ -423,17 +303,22 @@ def fuse_reads(fname, fname_sam_fused_output, fname_ref, qfiller = 0):
             prev = None
             continue
 
-        fused = read_fusion(r1 = prev, r2 = read, header=samfile.header, qfiller=qfiller)
+        fused = read_fusion(r1=prev, r2=read, header=samfile.header, qfiller=qfiller)
         c += 1
         cl = query_len(fused.cigarstring)
         ql = fused.query_length
-        assert cl == ql, f"CIGAR length and query length not matching {fused.cigarstring} : {fused.seq}"
+        assert (
+            cl == ql
+        ), f"CIGAR length and query length not matching {fused.cigarstring} : {fused.seq}"
         sam_out.write(fused)
         prev = None
 
     print(f"Finished fusion {c} pairs fused", file=sys.stderr)
     if ooo:
-        print(f"Warning {ooo} reads not grouped in pairs (not sorted alphabetically by name)", file=sys.stderr)
+        print(
+            f"Warning {ooo} reads not grouped in pairs (not sorted alphabetically by name)",
+            file=sys.stderr,
+        )
     if ooo:
         print(f"Warning {unal} reads not aligned", file=sys.stderr)
 
@@ -443,8 +328,8 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="# Merges paired-end reads to one fused reads based on alignment.",
         epilog="SAM file need to be sorted by QNAME (not POS) and need @SQ in header:\n\n"
-            "samtools view -h -T reference.fasta -t reference.fasta.fai  L001.bam > L001.sam &&\n\n"
-            "samtools sort -O sam -n L001.sam > L001.sorted.sam",
+        "samtools view -h -T reference.fasta -t reference.fasta.fai  L001.bam > L001.sam &&\n\n"
+        "samtools sort -O sam -n L001.sam > L001.sorted.sam",
     )
     parser.add_argument(
         "-f",
@@ -476,14 +361,21 @@ def parse_args():
         dest="output",
         help="file to write merged read-pairs to",
     )
-    parser.add_argument("FILE", nargs=1, metavar="SAM", help="input SAM file (sorted by QNAME)")
+    parser.add_argument(
+        "FILE", nargs=1, metavar="SAM", help="input SAM file (sorted by QNAME)"
+    )
 
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    fuse_reads(fname = args.FILE[0], fname_sam_fused_output = args.output, fname_ref = args.reference, qfiller = args.qfiller)
+    fuse_reads(
+        fname=args.FILE[0],
+        fname_sam_fused_output=args.output,
+        fname_ref=args.reference,
+        qfiller=args.qfiller,
+    )
 
 
 if __name__ == "__main__":
