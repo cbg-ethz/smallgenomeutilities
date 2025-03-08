@@ -24,3 +24,6 @@ dependencies:
   - progress
   - pyyaml
   - mafft
+
+  # tests only
+  - samtools
