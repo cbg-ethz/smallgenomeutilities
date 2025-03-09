@@ -23,7 +23,6 @@ import sys
 from itertools import groupby
 import more_itertools
 import pysam
-from Bio import SeqIO
 
 from smallgenomeutilities._version import __version__
 
@@ -87,12 +86,12 @@ def get_last_valid_pos(ll):
 
 
 # split into two lists at reference position
-def split_at_refpos(ll, pos):
-    # NOTE iterator needs to be consumed in-order (first "before" iter, then "after" iter)
-    before, after = more_itertools.before_and_after(
-        lambda it: (it[1] is None) or (it[1] < pos), ll
-    )
-    return list(before), list(after)
+def split_before_refpos(ll, pos):
+    return more_itertools.split_before(ll, lambda it: it[1] == pos, maxsplit=1)
+
+
+def split_after_refpos(ll, pos):
+    return more_itertools.split_after(ll, lambda it: it[1] == pos, maxsplit=1)
 
 
 # advance over insertion
@@ -234,8 +233,8 @@ def read_fusion(r1, r2, header, qfiller=0):
             llo = ll1 + ll2
         elif (ge - gs) < -1:  # when no gap, but an overlap
             # NOTE no indel should happen at the edge of the overlap
-            llbef, llo1 = split_at_refpos(ll1, rst2)
-            llo2, llaft = split_at_refpos(ll2, gs)
+            llbef, llo1 = split_before_refpos(ll1, rst2)
+            llo2, llaft = split_after_refpos(ll2, gs - 1)
 
             llo = llbef + reconcile_Overlap_tupples(llo1, llo2, r1.query_name) + llaft
         else:  # proper gap
