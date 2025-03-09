@@ -35,6 +35,7 @@ You can install these python modules either using pip or `bioconda <https://bioc
 - matplotlib
 - progress
 - pyyaml
+- more_itertools
 
 In addition to the modules, frameshift_deletions_checks currently requires `mafft <https://mafft.cbrc.jp/alignment/software/>`_ being installed -- it is also `available on bioconda <https://bioconda.github.io/recipes/mafft/README.html>`_.
 
