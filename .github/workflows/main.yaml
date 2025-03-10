@@ -9,6 +9,35 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  static_tests:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+            lfs: false
+
+      - name: Install conda environment dependencies
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          miniforge-variant: Miniforge3
+          # python-version: "*"
+          mamba-version: "*"
+          channels: conda-forge,bioconda
+          channel-priority: strict
+          activate-environment: lint
+          auto-update-conda: false
+          environment-file: tests/conda_lint_env.yaml
+
+      - name: README formatting for PyPI
+        run: rst-lint README.rst
+
   runtime_tests:
     strategy:
       max-parallel: 5

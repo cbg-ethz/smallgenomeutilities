@@ -1,0 +1,7 @@
+name: lint
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - restructuredtext_lint
+  - pygments
