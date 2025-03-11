@@ -33,7 +33,6 @@ dependencies = [
     "biopython ==1.83",
     "bcbio-gff",
     "pysam >=0.23",
-    "pysamstats",
     "pandas",
     "numpy",
     "scipy",
