@@ -160,6 +160,22 @@ remove_gaps_msa
 Given a multiple sequence alignment, remove loci with a gap fraction above a certain threshold.
 
 
+************************
+Using the utilities
+************************
+
+After installation, all utilities are available as command-line programs. You can run any utility by simply typing its name in your terminal, followed by any required arguments:
+
+.. code-block:: bash
+
+   # Get help for any utility
+   aln2basecnt --help
+   
+   # Example usage of paired_end_read_merger
+   paired_end_read_merger input.sam -f reference.fasta -o output_fused.sam 
+
+Each utility supports the ``--help`` flag which provides detailed information about its usage, required arguments, and available options.
+
 *************
 Citation
 *************
@@ -172,7 +188,7 @@ For all other scripts, please cite
 
 Posada-Céspedes S., Seifert D., Topolsky I., Jablonski K.P., Metzner K.J., and Beerenwinkel N. 2021.
 "V-pipe: a computational pipeline for assessing viral genetic diversity from high-throughput sequencing data."
-_Bioinformatics_, January. https://doi.org/10.1093/bioinformatics/btab015
+*Bioinformatics*, January. https://doi.org/10.1093/bioinformatics/btab015
 
 *************
 Contributions
