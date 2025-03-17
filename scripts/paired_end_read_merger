@@ -6,6 +6,8 @@
 # Description:
 # Merges paired-end reads to one fused reads based on alignment.
 #
+# Note: Unpaired reads are discarded.
+#
 # dependencies:
 #  - python==3.10.12
 #  - pysam==0.23.0
