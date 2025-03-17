@@ -345,7 +345,8 @@ def fuse_reads(fname, fname_sam_fused_output, fname_ref, qfiller=0):
         
     logging.info(f"Finished fusion: {c} pairs fused")
     if ooo:
-        logging.warning(f"{ooo} reads not grouped in pairs (not sorted alphabetically by name)")
+        logging.warning(f"{ooo} reads not grouped in pairs")
+        logging.warning("Either no pair exist or reads were not sorted alphabetically by name")
     if unal:
         logging.warning(f"{unal} reads not aligned")
 
