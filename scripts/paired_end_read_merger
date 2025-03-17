@@ -11,6 +11,7 @@
 #  - pysam==0.23.0
 #  - biopython==1.83
 #  - numpy==1.26.3
+#  - progress==1.6
 #
 # Author:
 # Michal Okoniewski
@@ -20,16 +21,22 @@
 
 import argparse
 import sys
+import logging
+from progress.bar import Bar
+
 from itertools import groupby
 import more_itertools
 import pysam
 
 from smallgenomeutilities._version import __version__
 
+
+
+
 ## SAM preparation, perhaps for a separate rule in Snakemake
 ## SAM file needs a header with @SQ, thus:
 # samtools view -h -T reference.fasta -t reference.fasta.fai  L001.bam > L001.sam
-# sot the SAM according to the QNAME
+# sort the SAM according to the QNAME
 # samtools sort -O sam -n L001.sam > L001.sorted.sam
 
 ####################################################################################
@@ -272,7 +279,7 @@ def read_fusion(r1, r2, header, qfiller=0):
 
 
 def fuse_reads(fname, fname_sam_fused_output, fname_ref, qfiller=0):
-    print(f"start processing {fname}", file=sys.stderr)
+    logging.info(f"Starting processing {fname}")
     samfile = pysam.AlignmentFile(fname if fname != "-" else sys.stdin, "r")
     sam_out = pysam.Samfile(
         fname_sam_fused_output if fname_sam_fused_output != "-" else sys.stdout,
@@ -284,6 +291,21 @@ def fuse_reads(fname, fname_sam_fused_output, fname_ref, qfiller=0):
     ooo = 0
     unal = 0
     prev = None
+    
+    # Try to estimate number of reads for progress bar
+    total_reads = None
+    progress_bar = None
+    if fname != "-" and logging.getLogger().level <= logging.INFO:
+        try:
+            # Quick estimation - count lines and divide by 2 for pairs
+            import subprocess
+            result = subprocess.run(['wc', '-l', fname], capture_output=True, text=True)
+            if result.returncode == 0:
+                total_reads = int(result.stdout.strip().split()[0]) // 2
+                progress_bar = Bar('Processing read pairs', max=total_reads)
+        except Exception as e:
+            logging.debug(f"Couldn't initialize progress bar: {e}")
+    
     for read in samfile.fetch():
         # not currently holding a previous pair member
         if prev is None:
@@ -292,14 +314,14 @@ def fuse_reads(fname, fname_sam_fused_output, fname_ref, qfiller=0):
 
         # out-of-order
         if prev.qname != read.qname:
+            logging.debug(f"Read {prev.qname} followed by {read.qname}")
             prev = read
-            print(f"read {prev.qname} followed by {read.qname}", file=sys.stderr)
             ooo += 1
             continue
 
         # for properly aligned, skipping unaligned
         if read.reference_end is None:
-            print(f"read pair {prev.qname} is unaligned", file=sys.stderr)
+            logging.debug(f"Read pair {prev.qname} is unaligned")
             unal += 1
             prev = None
             continue
@@ -312,16 +334,20 @@ def fuse_reads(fname, fname_sam_fused_output, fname_ref, qfiller=0):
             cl == ql
         ), f"CIGAR length and query length not matching {fused.cigarstring} : {fused.seq}"
         sam_out.write(fused)
+        
+        if progress_bar and c % 1000 == 0:
+            progress_bar.next(1000)
+        
         prev = None
-
-    print(f"Finished fusion {c} pairs fused", file=sys.stderr)
+    
+    if progress_bar:
+        progress_bar.finish()
+        
+    logging.info(f"Finished fusion: {c} pairs fused")
     if ooo:
-        print(
-            f"Warning {ooo} reads not grouped in pairs (not sorted alphabetically by name)",
-            file=sys.stderr,
-        )
-    if ooo:
-        print(f"Warning {unal} reads not aligned", file=sys.stderr)
+        logging.warning(f"{ooo} reads not grouped in pairs (not sorted alphabetically by name)")
+    if unal:
+        logging.warning(f"{unal} reads not aligned")
 
 
 def parse_args():
@@ -337,6 +363,17 @@ def parse_args():
         "--version",
         action="version",
         version="%(prog)s {version}".format(version=__version__),
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose debugging output",
+    )
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Suppress all output except errors",
     )
     parser.add_argument(
         "-f",
@@ -372,11 +409,25 @@ def parse_args():
         "FILE", nargs=1, metavar="SAM", help="input SAM file (sorted by QNAME)"
     )
 
+
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+    
+    # Configure logging
+    log_level = logging.INFO  # Default level
+    if args.quiet:
+        log_level = logging.ERROR
+    elif args.verbose:
+        log_level = logging.DEBUG
+    
+    logging.basicConfig(
+        format="%(levelname)s: %(message)s",
+        level=log_level
+    )
+    
     fuse_reads(
         fname=args.FILE[0],
         fname_sam_fused_output=args.output,
