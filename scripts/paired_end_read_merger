@@ -5,9 +5,11 @@
 #
 # Description:
 # Merges paired-end reads to one fused reads based on alignment.
+# Can also sort unpaired and unaligned reads to seperate output files.
 #
-# Note: Unpaired reads are discarded.
-#
+# Note: Unpaired reads can be written to a separate file or by default the same output file.
+#       Unaligned reads are skipped unless specified with --unaligned.
+#       
 # dependencies:
 #  - python==3.10.12
 #  - pysam==0.23.0
@@ -280,7 +282,7 @@ def read_fusion(r1, r2, header, qfiller=0):
     return outr
 
 
-def fuse_reads(fname, fname_sam_fused_output, fname_ref, qfiller=0):
+def fuse_reads(fname, fname_sam_fused_output, fname_ref, qfiller=0, fname_unpaired=None, fname_unaligned=None):
     logging.info(f"Starting processing {fname}")
     samfile = pysam.AlignmentFile(fname if fname != "-" else sys.stdin, "r")
     sam_out = pysam.Samfile(
@@ -288,10 +290,30 @@ def fuse_reads(fname, fname_sam_fused_output, fname_ref, qfiller=0):
         "w",
         header=samfile.header,
     )
+    
+    # Setup unpaired output - default to same as main output if not specified
+    if fname_unpaired is None:
+        sam_unpaired = sam_out
+    else:
+        sam_unpaired = pysam.Samfile(
+            fname_unpaired,
+            "w",
+            header=samfile.header,
+        )
+    
+    # Setup unaligned output if specified
+    sam_unaligned = None
+    if fname_unaligned:
+        sam_unaligned = pysam.Samfile(
+            fname_unaligned,
+            "w",
+            header=samfile.header,
+        )
 
     c = 0
     ooo = 0
     unal = 0
+    unpaired = 0
     prev = None
     
     # Try to estimate number of reads for progress bar
@@ -314,16 +336,32 @@ def fuse_reads(fname, fname_sam_fused_output, fname_ref, qfiller=0):
             prev = read
             continue
 
-        # out-of-order
+        # out-of-order or unpaired read (different name)
         if prev.qname != read.qname:
-            logging.debug(f"Read {prev.qname} followed by {read.qname}")
+            logging.debug(f"Read {prev.qname} has no pair, writing as unpaired")
+            # Write previous read as unpaired
+            if prev.reference_end is not None:
+                sam_unpaired.write(prev)
+                unpaired += 1
+            elif sam_unaligned:
+                sam_unaligned.write(prev)
+                unal += 1
+            
             prev = read
             ooo += 1
             continue
 
         # for properly aligned, skipping unaligned
-        if read.reference_end is None:
-            logging.debug(f"Read pair {prev.qname} is unaligned")
+        if read.reference_end is None or prev.reference_end is None:
+            logging.debug(f"Read pair {prev.qname} has at least one unaligned mate")
+            
+            # Handle unaligned reads if output file is specified
+            if sam_unaligned:
+                if prev.reference_end is None:
+                    sam_unaligned.write(prev)
+                if read.reference_end is None:
+                    sam_unaligned.write(read)
+            
             unal += 1
             prev = None
             continue
@@ -342,15 +380,36 @@ def fuse_reads(fname, fname_sam_fused_output, fname_ref, qfiller=0):
         
         prev = None
     
+    # Handle the last read if it exists
+    if prev is not None:
+        logging.debug(f"Final read {prev.qname} has no pair, writing as unpaired")
+        if prev.reference_end is not None:
+            sam_unpaired.write(prev)
+            unpaired += 1
+        elif sam_unaligned:
+            sam_unaligned.write(prev)
+            unal += 1
+    
     if progress_bar:
         progress_bar.finish()
+    
+    # Close file handles if they're different
+    if fname_unpaired and sam_unpaired != sam_out:
+        sam_unpaired.close()
+    if sam_unaligned:
+        sam_unaligned.close()
         
     logging.info(f"Finished fusion: {c} pairs fused")
+    logging.info(f"{unpaired} unpaired reads written")
     if ooo:
         logging.warning(f"{ooo} reads not grouped in pairs")
         logging.warning("Either no pair exist or reads were not sorted alphabetically by name")
     if unal:
-        logging.warning(f"{unal} reads not aligned")
+        logging.warning(f"{unal} unaligned reads")
+        if fname_unaligned:
+            logging.info(f"Unaligned reads written to {fname_unaligned}")
+        else:
+            logging.info("Unaligned reads were skipped (use --unaligned to write them)")
 
 
 def parse_args():
@@ -409,6 +468,24 @@ def parse_args():
         help="file to write merged read-pairs to",
     )
     parser.add_argument(
+        "--unpaired",
+        metavar="SAM",
+        required=False,
+        default=None,
+        type=str,
+        dest="unpaired",
+        help="file to write unpaired reads to (defaults to same as output)",
+    )
+    parser.add_argument(
+        "--unaligned",
+        metavar="SAM",
+        required=False,
+        default=None,
+        type=str,
+        dest="unaligned",
+        help="file to write unaligned reads to (if not specified, unaligned reads are skipped)",
+    )
+    parser.add_argument(
         "FILE", nargs=1, metavar="SAM", help="input SAM file (sorted by QNAME)"
     )
 
@@ -436,6 +513,8 @@ def main():
         fname_sam_fused_output=args.output,
         fname_ref=args.reference,
         qfiller=args.qfiller,
+        fname_unpaired=args.unpaired,
+        fname_unaligned=args.unaligned,
     )
 
 
