@@ -13,7 +13,7 @@ import pytest
 )
 def test_aln2basecnt(tmp_path, combin):
     # micro text with file with corner cases
-    minipath = PurePath("tests/test_paired_end_read_merger")
+    minipath = PurePath("tests/mini_sam")
     datapath = PurePath("tests/test_aln2basecnt")
 
     # prepare data
