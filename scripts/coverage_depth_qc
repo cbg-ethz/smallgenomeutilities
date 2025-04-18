@@ -34,7 +34,9 @@ def get_chrom_size(fname):
 
 
 def get_depth_QC(fname, depths=[5, 10, 15, 20, 30, 40, 50], chrom_size=None, name=None):
-    covdf = pd.read_csv(fname, sep="\t", index_col=["ref", "pos"])
+    # NOTE only keep first column ignore the rest (IRMA adds basecounts and other similar after that)
+    covdf = pd.read_csv(fname, sep="\t", index_col=[0, 1]).iloc[:, [0]]
+    covdf.index.rename(["ref", "pos"], inplace=True)
     if name is None:
         name = covdf.columns[0]
     cmb = pd.concat(
