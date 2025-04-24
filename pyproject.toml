@@ -19,12 +19,12 @@ description = "A collection of scripts that are useful for dealing with viral RN
 readme = "README.rst"
 requires-python = ">=3.7"
 keywords = ["NGS", "SAM", "BAM", "CRAM", "HIV-1", "SARS-CoV-2", "alignment"]
-license = {file = "LICENSE"}
+license = "GPL-2.0-or-later"
+license-files = [ "LICENSE" ]
 classifiers=[
     "Development Status :: 3 - Alpha",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Utilities",
-    "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
