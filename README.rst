@@ -199,7 +199,8 @@ Contributions
 - Ivan Blagoev Topolsky	|orcitopo|_	|gititopo|_
 - Lara Fuhrmann	|orclfuhr|_	|gitlfuhr|_
 - Mateo Carrara	|orcmcarr|_	|gitmcarr|_
-- Michal Okoniewski |orcmokn|_	|gitmokn|_
+- Michal Okoniewski	|orcmokn|_	|gitmokn|_
+- Gordon J. Köhn	|orcgkoe|_	|gitgkoe|_
 
 .. _orcdseif : https://orcid.org/0000-0003-4739-5110
 .. _gitdseif : https://github.com/SoapZA
@@ -213,6 +214,8 @@ Contributions
 .. _gitmcarr : https://github.com/mcarrara-bioinfo
 .. _orcmokn : https://orcid.org/0000-0003-4722-4506
 .. _gitmokn : https://github.com/michalogit
+.. _orcgkoe : https://orcid.org/0000-0003-3397-7769
+.. _gitgkoe : https://github.com/gordonkoehn
 
 .. |orcdseif| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
 .. |orcsposa| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
@@ -220,6 +223,7 @@ Contributions
 .. |orclfuhr| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
 .. |orcmcarr| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
 .. |orcmokn| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
+.. |orcgkoe| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
 
 .. |gitdseif| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
 .. |gitsposa| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
@@ -227,6 +231,7 @@ Contributions
 .. |gitlfuhr| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
 .. |gitmcarr| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
 .. |gitmokn| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
+.. |gitgkoe| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
 
 .. |github| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
 .. |orcid| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg

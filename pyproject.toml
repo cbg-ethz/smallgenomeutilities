@@ -7,9 +7,12 @@ authors = [
     {name = "Ivan Topolsky", email = "ivan.topolsky@sib.swiss"},
     {name = "Lara Fuhrmann", email = "lara.fuhrmann@bsse.ethz.ch"},
     {name = "Matteo Carrara", email = "carrara@nexus.ethz.ch"},
+    {name = "Michal Okoniewski", email = "michal.okoniewski@gmail.com" },
+    {name = "Gordon J. Köhn", email = "gordon.koehn@dbsse.ethz.ch"},
 ]
 maintainers = [
     {name = "Ivan Topolsky", email = "ivan.topolsky@sib.swiss"},
+    {name = "Gordon J. Köhn", email = "gordon.koehn@dbsse.ethz.ch"},
     {name = "Matteo Carrara", email = "carrara@nexus.ethz.ch"},
 ]
 description = "A collection of scripts that are useful for dealing with viral RNA NGS data."
