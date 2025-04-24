@@ -217,21 +217,21 @@ Contributions
 .. _orcgkoe : https://orcid.org/0000-0003-3397-7769
 .. _gitgkoe : https://github.com/gordonkoehn
 
-.. |orcdseif| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
-.. |orcsposa| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
-.. |orcitopo| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
-.. |orclfuhr| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
-.. |orcmcarr| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
-.. |orcmokn| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
-.. |orcgkoe| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
+.. |orcdseif| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-ORICID.svg
+.. |orcsposa| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-ORICID.svg
+.. |orcitopo| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-ORICID.svg
+.. |orclfuhr| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-ORICID.svg
+.. |orcmcarr| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-ORICID.svg
+.. |orcmokn| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-ORICID.svg
+.. |orcgkoe| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-ORICID.svg
 
-.. |gitdseif| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
-.. |gitsposa| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
-.. |gititopo| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
-.. |gitlfuhr| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
-.. |gitmcarr| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
-.. |gitmokn| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
-.. |gitgkoe| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
+.. |gitdseif| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-github.svg
+.. |gitsposa| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-github.svg
+.. |gititopo| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-github.svg
+.. |gitlfuhr| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-github.svg
+.. |gitmcarr| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-github.svg
+.. |gitmokn| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-github.svg
+.. |gitgkoe| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-github.svg
 
-.. |github| image:: https://cbg-ethz.github.io/V-pipe/img/mark-github.svg
-.. |orcid| image:: https://cbg-ethz.github.io/V-pipe/img/ORCIDiD_iconvector.svg
+.. |github| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-github.svg
+.. |orcid| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-ORICID.svg
