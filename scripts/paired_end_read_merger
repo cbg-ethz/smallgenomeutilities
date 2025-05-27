@@ -113,6 +113,10 @@ def advance_insert(t, liter):
         t = next(liter, None)
     return t, ins
 
+# insertion at the end?
+def ends_with_insert(ll):
+    return ll[-1][1] is None
+
 
 ####################################################################################
 # utlity: query length from CIGAR
@@ -235,6 +239,7 @@ def read_fusion(r1, r2, header, qfiller=0):
     # ge - the base before the R2
     ll2 = get_aligned_pairs_extended(r2)
     rst2 = get_first_valid_pos(ll2)
+    rend2 = get_last_valid_pos(ll2)
     ge = rst2 - 1
 
     # print(f"R1: {r1.query_name}\tgap start and end: {gs} {ge}", file=sys.stderr)
@@ -245,7 +250,31 @@ def read_fusion(r1, r2, header, qfiller=0):
         elif (ge - gs) < -1:  # when no gap, but an overlap
             # NOTE no indel should happen at the edge of the overlap
             llbef, llo1 = split_before_refpos(ll1, rst2)
-            llo2, llaft = split_after_refpos(ll2, gs - 1)
+            if rend2 > gs - 1:
+                # "Normal" case:
+                # r1: bbbbbooooooo
+                # r2:      oooooooaaaaaa
+                llo2, llaft = split_after_refpos(ll2, gs - 1)
+            elif rend2 < gs - 1 or ends_with_insert(llo1):
+                # "Nested" case: (due to quality issues such as quality-trimming or alignment soft-clipping)
+                # r1: bbbbboooooooaaaaaa (called llo2)
+                # r2:      ooooooo       (called llo1)
+                # NOTE if ll1 was R2 before machniom!-swap, it could end in an insertion (whose flanking primer was trimmed)
+                llo2, llaft = split_after_refpos(llo1, rend2)
+                llo1 = ll2
+                # print(f"{get_first_valid_pos(llbef)}-{get_last_valid_pos(llbef)} ; {get_first_valid_pos(llo1)}-{get_last_valid_pos(llo1)} + {get_first_valid_pos(llo2)}-{get_last_valid_pos(llo2)} ; {get_first_valid_pos(llaft)}-{get_last_valid_pos(llaft)}")
+                # assert get_first_valid_pos(llo1) == get_first_valid_pos(llo2)
+                # assert get_last_valid_pos(llo1) == get_last_valid_pos(llo2)
+            else:
+                # assert rend2 == gs - 1
+                # "Nested" edge case:
+                # r1: bbbbbooooooo
+                # r2:      ooooooo  (no llaft)
+                llo2 = ll2
+                llaft  = []
+                # print(f"{get_first_valid_pos(llbef)}-{get_last_valid_pos(llbef)} ; {get_first_valid_pos(llo1)}-{get_last_valid_pos(llo1)} + {get_first_valid_pos(llo2)}-{get_last_valid_pos(llo2)}")
+                # assert get_first_valid_pos(llo1) == get_first_valid_pos(llo2)
+                # assert get_last_valid_pos(llo1) == get_last_valid_pos(llo2)
 
             llo = llbef + reconcile_Overlap_tupples(llo1, llo2, r1.query_name) + llaft
         else:  # proper gap
