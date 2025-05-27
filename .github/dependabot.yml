@@ -1,0 +1,14 @@
+# This file configures Dependabot for a Python project using pip.
+# It specifies that Dependabot should check for updates to Python packages
+# in the root directory of the project on a weekly basis.
+
+version: 2
+updates:
+  - package-ecosystem: "pip" 
+    directory: "/" 
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
