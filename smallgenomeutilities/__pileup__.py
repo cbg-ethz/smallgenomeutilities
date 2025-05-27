@@ -32,6 +32,11 @@ class AlignedRead():
             # because deletions are not reported in read.query_sequence
             elif op == 2:
                 alignment += ''.join(np.repeat('-', length))
+            # Add gap symbol '*' (skip) for skips (3)
+            # Not in read.query_sequence either.
+            # SAMv1: For mRNA-to-genome alignment, an N operation represents an intron. For other types of align-ments, the interpretation of N is not defined.
+            elif op == 3:
+                alignment += ''.join(np.repeat('*', length))
             # skip read bases if they correspond to an insertion (1) or soft-
             # clipped bases (4)
             elif op in [1, 4]:
@@ -159,14 +164,18 @@ def get_cnt_matrix (alnfile, reference_name, alpha='ACGT-'):
         #nt_counts[alignment_positions,:] += np.equal.outer(alignment_sequence, nt_alpha)
         try:
             nt_counts[read.reference_start:read.reference_end,:] += np.equal.outer(alignment_sequence, nt_alpha)
-        except ValueError:
+        except ValueError as e:
+            print(e)
             print(f"""
 Cannot sum read to the count matrix
 read number:\t{reads}
 template len:\t{read.template_length}
 ref start:\t{read.reference_start}
 ref ends: \t{read.reference_end}""")
-            print(alignment_sequence)
+            try:
+                print(f"seq:\t<{''.join([ chr(c) for c  in alignment_sequence])}>")
+            except:
+                print(f"seq-bin:\t{alignment_sequence}")
             print(np.equal.outer(alignment_sequence, nt_alpha))
 
     return nt_counts, reads, insert_tot, rlen_tot
