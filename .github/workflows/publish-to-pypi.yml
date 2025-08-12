@@ -22,7 +22,7 @@ jobs:
 
     steps:
     - name: Checkout repository (with tags)
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       if: false == startsWith(github.ref, 'refs/tags/')
       with:
         fetch-depth: 20
@@ -32,7 +32,7 @@ jobs:
         # NOTE to save on bandwidth costs, GitHub Action will not use GitHub's own LFS
 
     - name: Checkout repository (shallow)
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       if: startsWith(github.ref, 'refs/tags/')
       with:
         lfs: false
