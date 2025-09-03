@@ -40,6 +40,18 @@ def create_primer_fasta(primers, output, ref):
     return 0
 
 
+def dedupe_exact(rows):
+    """Remove exact duplicate rows, keeping the first occurrence."""
+    seen = set()
+    out = []
+    for r in rows:
+        key = tuple(r)              # convert list -> hashable tuple
+        if key not in seen:
+            seen.add(key)
+            out.append(r)
+    return out
+
+
 def create_primer_insert_bed(primers, output, ref, psep, npos, spos):
     print("Building the primer inserts BED file")
     if(ref == ""):
@@ -47,27 +59,44 @@ def create_primer_insert_bed(primers, output, ref, psep, npos, spos):
     if(spos < npos):
         sys.exit("Error: the primer side is before the primer number. The sorting procedure depends on the primer numbers coming before")
     print("Creating the inserts BED file. The script assumes that primer number always comes before the primer side, that the side is defined as LEFT or RIGHT and that any other information between name, number and side is static")
-    primers = primers.sort_values(primers.columns[3])
-    isfirst = True
+    #primers = primers.sort_values(primers.columns[3])
+    # We first sort by primer number
+    primers = primers.sort_values(
+        by=primers.columns[3],
+        key=lambda s: pd.to_numeric(s.str.split('_').str[1], errors='coerce'),
+        na_position='last'
+    )
     finallist = []
+    primers_complete = []
+    all_primers_num = primers[3].str.split("_").str.get(1)
     for i, row in primers.iterrows():
         # skip empty lines, and headers/comments
         if not row[3] or not row[1] or row[1][0] == '#':
             continue
         pnum = row[3].split("_")[npos]
-        pside = row[3].split("_")[spos]
-        if isfirst:
-            first = [ row[1], row[2], row[3], row[4], row[5], pnum, pside ]
-            isfirst = False
-        else:
-            fragstart=first[1]
-            fragend=row[1]
-            tmp = row[3].split(psep)[0:npos]
-            basename = "_".join(tmp) 
-            fragname = basename + "_INSERT_" + row[3].split(psep)[npos]
-            finallist.append([ ref, fragstart, fragend, fragname, row[4], row[5] ])
-            final = pd.DataFrame(finallist)
-            isfirst = True
+        if pnum in primers_complete:
+            continue
+        all_for_pnum = all_primers_num.index[ all_primers_num.eq(str(pnum)) ]
+        rows = primers.loc[all_for_pnum]
+        left = rows[ rows[3].str.contains('LEFT', na=False) ]
+        right = rows[ rows[3].str.contains('RIGHT', na=False) ]
+        # after extracting and separating all left and right primers for the specific primer number, we need to go through all pairs to generate the inserts
+        this_fragments = []
+        for p1, left_row in left.iterrows():
+            for p2, rigth_row in right.iterrows():
+                fragstart = left[2].values[0]
+                fragend = right[1].values[0]
+                tmp = row[3].split(psep)[0:npos]
+                basename = "_".join(tmp)
+                fragname = basename + "_INSERT_" + left_row[3].split(psep)[npos]
+                this_fragments.append([ref, fragstart, fragend, fragname, left_row[4], left_row[5] ])
+        this_fragments = dedupe_exact(this_fragments)
+        if len(this_fragments) == 1:
+            this_fragments = this_fragments[0]
+        primers_complete.append(pnum)
+        finallist.append(this_fragments)
+
+    final = pd.DataFrame(finallist)
     try:
         final.to_csv(output+".insert.bed", sep="\t", header=False, index=False)
     except:
