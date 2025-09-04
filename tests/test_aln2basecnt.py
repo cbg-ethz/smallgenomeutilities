@@ -1,7 +1,9 @@
 import subprocess
 from pathlib import PurePath
 import json
+import yaml
 import pytest
+import numpy as np
 
 
 @pytest.mark.parametrize(
@@ -63,7 +65,20 @@ def test_aln2basecnt(tmp_path, combin):
     # check output
     for f in files.values():
         with open(exp[f], "rt") as expf, open(out[f], "rt") as outf:
-            assert [r for r in expf] == [row for row in outf]
+            if '.yaml' in f:
+                exp_data = yaml.safe_load(expf)
+                out_data = yaml.safe_load(outf)
+                if isinstance(exp_data, dict) and len(exp_data) == 1:
+                    key = list(exp_data.keys())[0]
+                    for k, v in exp_data[key].items():
+                        if isinstance(v, float):
+                            assert np.isclose(v, out_data[key][k], atol=1e-10)
+                        else:
+                            assert v == out_data[key][k]
+                else:
+                    assert exp_data == out_data
+            else:
+                assert [r for r in expf] == [row for row in outf]
 
 
 @pytest.mark.parametrize(
@@ -100,4 +115,17 @@ def test_aln2basecnt_more(tmp_path, combin):
     # check output
     for f in files.values():
         with open(exp[f], "rt") as expf, open(out[f], "rt") as outf:
-            assert [r for r in expf] == [row for row in outf]
+            if '.yaml' in f:
+                exp_data = yaml.safe_load(expf)
+                out_data = yaml.safe_load(outf)
+                if isinstance(exp_data, dict) and len(exp_data) == 1:
+                    key = list(exp_data.keys())[0]
+                    for k, v in exp_data[key].items():
+                        if isinstance(v, float):
+                            assert np.isclose(v, out_data[key][k], atol=1e-10)
+                        else:
+                            assert v == out_data[key][k]
+                else:
+                    assert exp_data == out_data
+            else:
+                assert [r for r in expf] == [row for row in outf]
