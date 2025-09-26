@@ -10,6 +10,7 @@
 # Matteo Carrara (NEXUS Personalized Health Technologies)
 #################
 
+import re
 import pandas as pd
 import argparse
 import sys
@@ -52,48 +53,57 @@ def dedupe_exact(rows):
     return out
 
 
-def create_primer_insert_bed(primers, output, ref, psep, npos, spos):
+
+def create_primer_insert_bed(primers, output, ref, name_regexp):
+    nrx = re.compile(name_regexp)
+    def rxgroups(s):
+        m = nrx.search(s)
+
+        assert m is not None, f"Cannot parse name <{s}> with regexp /{name_regexp}/"
+        return (m.groupdict(), m)
+
     print("Building the primer inserts BED file")
     if(ref == ""):
         ref=primers[0][0]
-    if(spos < npos):
-        sys.exit("Error: the primer side is before the primer number. The sorting procedure depends on the primer numbers coming before")
+    # if(spos < npos):
+    #     sys.exit("Error: the primer side is before the primer number. The sorting procedure depends on the primer numbers coming before")
     print("Creating the inserts BED file. The script assumes that primer number always comes before the primer side, that the side is defined as LEFT or RIGHT and that any other information between name, number and side is static")
     #primers = primers.sort_values(primers.columns[3])
     # We first sort by primer number
     primers = primers.sort_values(
         by=primers.columns[3],
-        key=lambda s: pd.to_numeric(s.str.split('_').str[1], errors='coerce'),
+        key=lambda s: pd.to_numeric(s.str.extract(nrx)["num"], errors='coerce'),
         na_position='last'
     )
     finallist = []
-    primers_complete = []
-    all_primers_num = primers[3].str.split("_").str.get(1)
+    primers_complete = set()
+    all_primers_num = primers[3].str.extract(nrx)["num"]
     for i, row in primers.iterrows():
         # skip empty lines, and headers/comments
         if not row[3] or not row[1] or row[1][0] == '#':
             continue
-        pnum = row[3].split("_")[npos]
+        mg = rxgroups(row[3])
+        pnum = int(mg[0]["num"])
         if pnum in primers_complete:
             continue
         all_for_pnum = all_primers_num.index[ all_primers_num.eq(str(pnum)) ]
         rows = primers.loc[all_for_pnum]
-        left = rows[ rows[3].str.contains('LEFT', na=False) ]
-        right = rows[ rows[3].str.contains('RIGHT', na=False) ]
+        sides = rows[3].str.extract(nrx)["side"]
+        left = rows[ sides == 'LEFT' ]
+        right = rows[ sides == 'RIGHT' ]
         # after extracting and separating all left and right primers for the specific primer number, we need to go through all pairs to generate the inserts
         this_fragments = []
         for p1, left_row in left.iterrows():
             for p2, rigth_row in right.iterrows():
                 fragstart = left[2].values[0]
                 fragend = right[1].values[0]
-                tmp = row[3].split(psep)[0:npos]
-                basename = "_".join(tmp)
-                fragname = basename + "_INSERT_" + left_row[3].split(psep)[npos]
+                basename = row[3][0:mg[1].start()]
+                fragname = basename + "INSERT_" + rxgroups(left_row[3])[0]["num"]
                 this_fragments.append([ref, fragstart, fragend, fragname, left_row[4], left_row[5] ])
         this_fragments = dedupe_exact(this_fragments)
         if len(this_fragments) == 1:
             this_fragments = this_fragments[0]
-        primers_complete.append(pnum)
+        primers_complete.add(pnum)
         finallist.append(this_fragments)
 
     final = pd.DataFrame(finallist)
@@ -111,9 +121,7 @@ if __name__ == '__main__':
     parser.add_argument('--primerfile', required=True, type=str, help='the file containing the list of primers')
     parser.add_argument('--output', required=True, type=str, help='the name of the output file')
     parser.add_argument('--change_ref', required=False, type=str, default="", help='The string to use as reference, in case the primer file uses a different reference name')
-    parser.add_argument('--primer_name_sep', required=False, type=str, default="_", help='The separator used between elements of the primer name')
-    parser.add_argument('--primer_number_pos', required=True, type=int, help='Position of element with the primer number in the primer name. 0-based')
-    parser.add_argument('--primer_side_pos', required=True, type=int, help='Position of element with the primer side in the primer name. 0-based')
+    parser.add_argument('--name_regexp', required=False, type=str, default=r"(?P<num>[0-9]+)[^0-9]+(?P<side>LEFT|RIGHT)", help='The regular expression to parse primers names, searching for named groups "num" and "side"')
 
     args = parser.parse_args()
 
@@ -121,4 +129,4 @@ if __name__ == '__main__':
     primers = pd.read_csv(args.primerfile, sep='\t', header=None)
     create_primer_tsv(primers, args.output)
     create_primer_fasta(primers, args.output, args.change_ref)
-    create_primer_insert_bed(primers, args.output, args.change_ref, args.primer_name_sep, args.primer_number_pos, args.primer_side_pos)
+    create_primer_insert_bed(primers, args.output, args.change_ref, args.name_regexp)

@@ -23,9 +23,6 @@ def test_workflow(tmp_path, virus):
             "prepare_primers",
             f"--primerfile={infile}",
             "--change_ref=NC_045512.2",
-            "--primer_name_sep=_",
-            "--primer_number_pos=2",
-            "--primer_side_pos=3",
             f"--output={outparam}",
         ]
     )
