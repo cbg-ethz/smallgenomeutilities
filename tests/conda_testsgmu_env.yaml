@@ -11,7 +11,7 @@ dependencies:
   - pytest
 
   # runtime
-  - biopython
+  - biopython >=1.86
   - bcbio-gff
   - pysam >=0.23
   - pysamstats
