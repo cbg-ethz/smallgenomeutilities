@@ -73,6 +73,10 @@ aln2basecnt
 -----------
 extract base counts and coverage information from a single alignment file
 
+classif_by_coverage
+-------------------
+computes 1.fraction covered and 2.mean coverage of specific gene from coverage TSV files
+
 compute_mds
 -----------
 Compute multidimensional scaling for visualizing distances among reconstructed haplotypes.
@@ -201,6 +205,7 @@ Contributions
 - Mateo Carrara	|orcmcarr|_	|gitmcarr|_
 - Michal Okoniewski	|orcmokn|_	|gitmokn|_
 - Gordon J. Köhn	|orcgkoe|_	|gitgkoe|_
+- Auguste Rimaite	|orcauri|_	|gitauri|_
 
 .. _orcdseif : https://orcid.org/0000-0003-4739-5110
 .. _gitdseif : https://github.com/SoapZA
@@ -216,6 +221,8 @@ Contributions
 .. _gitmokn : https://github.com/michalogit
 .. _orcgkoe : https://orcid.org/0000-0003-3397-7769
 .. _gitgkoe : https://github.com/gordonkoehn
+.. _orcauri : https://orcid.org/0009-0004-6840-1668
+.. _gitauri : https://github.com/AugusteRi
 
 .. |orcdseif| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-ORICID.svg
 .. |orcsposa| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-ORICID.svg
@@ -224,6 +231,7 @@ Contributions
 .. |orcmcarr| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-ORICID.svg
 .. |orcmokn| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-ORICID.svg
 .. |orcgkoe| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-ORICID.svg
+.. |orcauri| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-ORICID.svg
 
 .. |gitdseif| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-github.svg
 .. |gitsposa| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-github.svg
@@ -232,6 +240,7 @@ Contributions
 .. |gitmcarr| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-github.svg
 .. |gitmokn| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-github.svg
 .. |gitgkoe| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-github.svg
+.. |gitauri| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-github.svg
 
 .. |github| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-github.svg
 .. |orcid| image:: https://cbg-ethz.github.io/V-pipe/assets/img/icon-ORICID.svg
