@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+
+import sys
+import argparse
+import pandas as pd
+
+
+def is_passing_threshold(fraction_covered, average_coverage, min_fraction_gene_covered, min_avg_gene_coverage_depth):
+    if (fraction_covered >= min_fraction_gene_covered) and (average_coverage >= min_avg_gene_coverage_depth):
+        return True
+    else:
+        return False
+
+def get_coverage_at_specific_region(fname, bedfile, threshold, gene, min_fraction_gene_covered, min_avg_gene_coverage_depth, name = None):
+    covdf = pd.read_csv(fname, sep="\t", index_col=[0, 1]).iloc[:, [0]]
+    covdf.index.rename(["ref", "pos"], inplace=True)
+    if name is None:
+        name = covdf.columns[0] # using the name from TSV header
+
+    beddf = pd.read_table(
+        bedfile,
+        index_col=False,
+        names=["ref", "start", "stop", "gene"],
+        dtype={
+            "ref": "str",
+            "start": "uint32",
+            "stop": "uint32",
+            "gene": "str",
+        },
+    )
+
+    results = []
+
+    for reference in beddf["ref"].unique():
+        # get start and stop of G gene for this reference
+        start, end = beddf.loc[
+            (beddf["ref"] == reference) & (beddf["gene"] == gene),
+            ["start", "stop"]
+        ].iloc[0]
+
+        # subset coverage within this region
+        pos_index=covdf.index.get_level_values("pos")
+        subcov = covdf.loc[
+            (covdf.index.get_level_values("ref") == reference) &
+            (pos_index >= start) & (pos_index <= end)
+        ]
+        #         (covdf.index.get_level_values("pos").between(start, end))]
+        # If subcov is empty (no positions in the coverage TSV for that gene/reference) -> continue
+        if subcov.empty:
+            results.append({
+                "sample": name,
+                "ref": reference,
+                "gene_fraction_covered": 0,
+                "mean_cov_depth_of_gene": 0,
+                "gene": gene,
+                "result": "no coverage"
+            })
+            continue
+
+
+
+        # count positions with coverage above threshold
+        gene_length = end - start + 1
+
+        covered_positions = (subcov.iloc[:, 0] >= threshold).sum()
+        frac_covered = covered_positions / gene_length
+
+        covered_sum = (subcov.iloc[:, 0]).sum()
+        mean_covered = covered_sum / gene_length
+
+        if (is_passing_threshold(fraction_covered=frac_covered,
+                                           average_coverage=mean_covered,
+                                           min_fraction_gene_covered=min_fraction_gene_covered,
+                                           min_avg_gene_coverage_depth=min_avg_gene_coverage_depth)):
+            report = "pass"
+        else:
+            report = "reject"
+
+        results.append({"sample": name,
+                        "ref": reference,
+                        "gene_fraction_covered": frac_covered,
+                        "mean_cov_depth_of_gene": mean_covered,
+                        "gene": gene,
+                        "result": report})
+
+    resultsdf = pd.DataFrame(results)
+
+
+    return (resultsdf)
+
+def parse_args():
+    """Set up the parsing of command-line arguments"""
+    parser = argparse.ArgumentParser(
+        description="Computes 1.fraction covered and 2.mean coverage of specific gene from coverage TSV files (made by aln2basecnt, samtools depth, etc.)",
+        epilog="input TSVs support compression",
+    )
+    parser.add_argument(
+        "-b",
+        "--bed",
+        metavar="BED",
+        required=True,
+        type=str,
+        help="bed file with regions of interest specific for different references",
+    )
+    parser.add_argument(
+        "-t",
+        "--threshold",
+        metavar="THRESHOLD",
+        required=False,
+        type=int,
+        dest="threshold",
+        default=10,
+        help="coverage depth threshold (default 10)",
+    )
+    parser.add_argument(
+        "-n",
+        "--names",
+        required=False,
+        nargs="+",
+        action="append",
+        type=str,
+        dest="names",
+        help="name to use for each TSV file (by default extract from the TSV column)",
+    )
+    parser.add_argument(
+        "-g",
+        "--gene",
+        required=False,
+        type=str,
+        dest="gene",
+        default='G',
+        help="which gene should be checked (by default G)",
+    )
+    parser.add_argument(
+        "-f",
+        "--min_fraction_gene_covered",
+        required=False,
+        default=0.8,
+        type=float,
+        help="minimal fraction of gene covered (default 0.8)",
+    )
+    parser.add_argument(
+        "-m",
+        "--min_avg_gene_coverage_depth",
+        required=False,
+        default=100,
+        type=float,
+        help="minimal average coverage depth of gene (default 100x)",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        required=False,
+        type=str,
+        dest="output",
+        help="file to write stats to",
+    )
+
+    parser.add_argument("FILE", nargs="+", metavar="TSV", help="coverage TSV file")
+
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+
+    if args.names is None:
+        names = [None] * len(args.FILE)
+    else:
+        names = [s for l in args.names for d in l for s in d.split(",")]
+        assert len(names) == len(
+            list(set(names))
+        ), f"Some names are duplicates: {[ n for n in list(set(names)) if names.count(n) > 1 ]}"
+        assert len(names) == len(
+            args.FILE
+        ), f"There must be as many names as files. Got { len(names) } names and { len(args.FILE) } files"
+
+    thresh = args.threshold
+    gene = args.gene
+    min_fraction_gene_covered = args.min_fraction_gene_covered
+    min_avg_gene_coverage_depth = args.min_avg_gene_coverage_depth
+
+    out = pd.DataFrame()
+
+    for name, fname in zip(names, args.FILE):
+        print(fname, file=sys.stderr)
+
+        sample_statistics = get_coverage_at_specific_region(
+            fname=fname,
+            bedfile=args.bed,
+            threshold=thresh,
+            name=name,
+            gene=gene,
+            min_fraction_gene_covered=min_fraction_gene_covered,
+            min_avg_gene_coverage_depth=min_avg_gene_coverage_depth
+        )
+        out = pd.concat([out, sample_statistics], axis=0)
+
+    if not args.output or args.output == "-":
+        print(out)
+        return 0
+    else:
+        out.to_csv(args.output, sep="\t", index=False)
+
+if __name__ == "__main__":
+    main()
