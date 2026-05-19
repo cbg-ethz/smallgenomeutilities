@@ -102,7 +102,7 @@ jobs:
   #
   #   steps:
   #   - name: Fetch distributions 📦
-  #     uses: actions/download-artifact@v5.0.0
+  #     uses: actions/download-artifact@v8.0.1
   #     with:
   #       name: dist
   #       path: dist
@@ -132,7 +132,7 @@ jobs:
 
     steps:
     - name: Fetch distributions 📦
-      uses: actions/download-artifact@v5.0.0
+      uses: actions/download-artifact@v8.0.1
       with:
         name: dist
         path: dist
