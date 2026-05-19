@@ -23,7 +23,7 @@ jobs:
             lfs: false
 
       - name: Install conda environment dependencies
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v4
         with:
           miniforge-version: latest
           miniforge-variant: Miniforge3
@@ -68,7 +68,7 @@ jobs:
           git lfs pull
           git lfs checkout
 
-      - uses: conda-incubator/setup-miniconda@v3
+      - uses: conda-incubator/setup-miniconda@v4
         with:
           miniforge-version: latest
           # miniforge-variant: Miniforge3
